@@ -1,5 +1,5 @@
 # build stage
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.22.4-alpine AS builder
 
 WORKDIR /app
 COPY . .
