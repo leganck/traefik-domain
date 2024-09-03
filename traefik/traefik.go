@@ -2,7 +2,9 @@ package traefik
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/leganck/docker-traefik-domain/config"
+	"github.com/leganck/docker-traefik-domain/util"
 	"golang.org/x/net/publicsuffix"
 	"io"
 	"log"
@@ -37,9 +39,15 @@ type RouterInfo struct {
 	Provider    string   `json:"provider,omitempty"`
 }
 
-func TraefikDomains() map[string][]*Domain {
-
-	resp, err := http.Get(getTraefikUrl())
+func TraefikDomains() (map[string][]*Domain, error) {
+	traefikUrl, username, password := getTraefikUrl()
+	req, err := http.NewRequest("GET", traefikUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+	// Set the auth for the request.
+	req.SetBasicAuth(username, password)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Println(err)
 	}
@@ -51,6 +59,7 @@ func TraefikDomains() map[string][]*Domain {
 	err = json.Unmarshal(all, &routers)
 	if err != nil {
 		log.Printf("json解析异常 %s\n", all)
+		return nil, fmt.Errorf("json解析异常 %s", all)
 	}
 
 	domains := make(map[string]int)
@@ -90,19 +99,20 @@ func TraefikDomains() map[string][]*Domain {
 		domainMap[mainDomain] = append(domainMap[mainDomain], domain)
 	}
 
-	return domainMap
+	return domainMap, nil
 }
 
-func getTraefikUrl() string {
-	var traefikUrl = config.GetTraefikHost()
+func getTraefikUrl() (string, string, string) {
+
+	traefikUrl, username, password := util.ParseUrl(config.GetTraefikHost())
 	var router = "/api/http/routers"
-	if !strings.HasSuffix(traefikUrl, "http") {
+	if !strings.HasPrefix(traefikUrl, "http") {
 		traefikUrl = "http://" + traefikUrl
 	}
 	parse, err := url.Parse(traefikUrl + router)
 	if err != nil {
-
+		log.Printf("url解析异常:%s %s", traefikUrl, err)
 	}
-	return parse.String()
+	return parse.String(), username, password
 
 }

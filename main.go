@@ -44,7 +44,11 @@ func upRecord(conf *config.Config) {
 		if err != nil {
 			panic(err)
 		}
-		domains := traefik.TraefikDomains()
+		domains, err := traefik.TraefikDomains()
+		if err != nil {
+			log.Printf("traefik domains error: %v", err)
+			return
+		}
 		for k, v := range domains {
 			err := provider.AddOrUpdateCname(k, v)
 			if err != nil {

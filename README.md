@@ -6,7 +6,7 @@
 ## 环境变量配置
 以下是需要配置的环境变量：
 
-1. **TRAEFIK_HOST**: Traefik的URL地址。
+1. **TRAEFIK_HOST**: Traefik的URL地址支持httpBasic 认证 username:password@url。
 2. **POLL_INTERVAL**: 拉取间隔，用于指定拉取的频率。
 3. **DNS_NAME**: DNS提供者的名称，如AdGuard或Dnspod。
 4. **DNS_ID**: DNS提供者的ID。
