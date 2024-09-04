@@ -5,7 +5,6 @@ import (
 	"github.com/gmichels/adguard-client-go"
 	"github.com/leganck/docker-traefik-domain/config"
 	"github.com/leganck/docker-traefik-domain/traefik"
-	"log"
 )
 
 var scheme = "http"
@@ -26,12 +25,15 @@ func (a *AdGuard) Init(dnsConf *config.Config) error {
 	client, _ := adguard.NewClient(&adGuardHost, &dnsConf.ID, &dnsConf.Secret, &scheme, &timeout)
 	a.client = client
 	a.dnsConf = dnsConf
+	logger = logger.WithField("provider", "adguard")
 	return nil
 }
 func (p *AdGuard) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
+	logger = logger.WithField("domain", domain)
 	rewrites, err := p.client.GetAllRewrites()
 	if err != nil {
-		log.Printf("GetAllRewrites failed: %v", err)
+		logger.Errorf("GetAllRewrites failed: %v", err)
+		return fmt.Errorf("GetAllRewrites failed: %v", err)
 	}
 	rewritesMap := make(map[string]string)
 	for _, re := range *rewrites {
@@ -66,7 +68,7 @@ func (p *AdGuard) AddOrUpdateCname(domain string, domains []*traefik.Domain) err
 
 func (p *AdGuard) updateRecord(domain string, list []*traefik.Domain) error {
 	if list == nil {
-		log.Printf("%s: '%s' no record to update", p.name, domain)
+		logger.Debugln("no record to update")
 		return nil
 	}
 	for _, d := range list {
@@ -75,16 +77,17 @@ func (p *AdGuard) updateRecord(domain string, list []*traefik.Domain) error {
 			Answer: p.dnsConf.RecordValue,
 		})
 		if err != nil {
-			return fmt.Errorf("%s :%s update failed: %v", p.name, domain, err)
+			logger.Errorf("update failed: %v", d.CustomDomain)
+			continue
 		}
-		log.Printf(" %s :%s update success: %v", p.name, domain, rewrite.Domain)
+		logger.Infof("update success: %v", rewrite.Domain)
 	}
 	return nil
 }
 
 func (p *AdGuard) Add(domain string, list []*traefik.Domain) error {
 	if list == nil {
-		log.Printf("%s: '%s' no record to add", p.name, domain)
+		logger.Printf("%s: '%s' no record to add", p.name, domain)
 		return nil
 	}
 	for _, d := range list {
@@ -95,7 +98,7 @@ func (p *AdGuard) Add(domain string, list []*traefik.Domain) error {
 		if err != nil {
 			return fmt.Errorf("%s :%s add failed: %v", p.name, domain, err)
 		}
-		log.Printf(" %s :%s add success: %v value", p.name, domain, rewrite.Domain)
+		logger.Printf(" %s :%s add success: %v value", p.name, domain, rewrite.Domain)
 	}
 	return nil
 }

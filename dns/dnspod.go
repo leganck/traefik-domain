@@ -4,7 +4,7 @@ import (
 	"github.com/leganck/dnspod-go"
 	"github.com/leganck/docker-traefik-domain/config"
 	"github.com/leganck/docker-traefik-domain/traefik"
-	"log"
+	log "github.com/sirupsen/logrus"
 )
 
 type DnsPod struct {
@@ -17,6 +17,7 @@ func (p *DnsPod) Init(dnsConf *config.Config) error {
 	p.dnsConf = dnsConf
 	p.name = "DnsPod"
 	p.client = dnspod.NewClient(dnspod.CommonParams{LoginToken: dnsConf.ID + "," + dnsConf.Secret, Format: "json"})
+	logger = log.WithField("provider", p.name)
 
 	return nil
 }
@@ -31,7 +32,7 @@ func (p *DnsPod) list(domain string) ([]dnspod.Record, error) {
 }
 
 func (p *DnsPod) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
-
+	logger = logger.WithField("domain", domain)
 	domainMap := make(map[string]dnspod.Record)
 
 	list, err := p.list(domain)
@@ -40,16 +41,16 @@ func (p *DnsPod) AddOrUpdateCname(domain string, domains []*traefik.Domain) erro
 	}
 
 	if err != nil {
-		log.Printf("%s: '%s' list error: %v\n", p.name, domain, err)
+		logger.Warningf("'%s' list error: %v", domain, err)
 		return err
 	}
 	var updateList = make(map[dnspod.Record]*traefik.Domain)
 	var addList []*traefik.Domain
 
 	for _, d := range domains {
-		_, ok := domainMap[d.SubDomain]
+		record, ok := domainMap[d.SubDomain]
 		if ok {
-			if d.CustomDomain == p.dnsConf.RecordValue {
+			if record.Value != p.dnsConf.RecordValue {
 				updateList[domainMap[d.SubDomain]] = d
 			}
 		} else {
@@ -71,7 +72,7 @@ func (p *DnsPod) AddOrUpdateCname(domain string, domains []*traefik.Domain) erro
 
 func (p *DnsPod) updateCname(domain string, updateList map[dnspod.Record]*traefik.Domain) error {
 	if len(updateList) == 0 {
-		log.Printf("%s: '%s' no record to update\n", p.name, domain)
+		logger.Debugln("no record to update")
 		return nil
 	}
 	var errorList []*traefik.Domain
@@ -83,22 +84,22 @@ func (p *DnsPod) updateCname(domain string, updateList map[dnspod.Record]*traefi
 				record.Type = p.dnsConf.RecordType
 				_, _, err := p.client.Records.Update("", domain, record.ID, record)
 				if err != nil {
-					log.Printf("%s update record %s %s error: %v\n", domain, record.Name, p.dnsConf.RecordValue, err)
+					logger.Errorf("update record %s %s error: %v", record.Name, p.dnsConf.RecordValue, err)
 					errorList = append(errorList, v)
 					continue
 				}
 			} else {
-				log.Printf("%s record %s %s no need update\n", domain, record.Name, record.Value)
+				logger.Infof("record %s %s no need update", record.Name, record.Value)
 			}
 		}
 	}
-	log.Printf("%s:all record update success\n", p.name)
+	logger.Infof("all record update success")
 	return nil
 }
 
 func (p *DnsPod) AddRecord(domain string, list []*traefik.Domain) error {
 	if list == nil {
-		log.Printf("%s: '%s' no record to add", p.name, domain)
+		logger.Debugf("no record to add")
 		return nil
 	}
 	var errorList []*traefik.Domain
@@ -112,12 +113,12 @@ func (p *DnsPod) AddRecord(domain string, list []*traefik.Domain) error {
 			Status: "enable",
 		})
 		if err != nil {
-			log.Printf("%s:%s add record %s %s error: %v\n", p.name, domain, d.SubDomain, p.dnsConf.RecordValue, err)
+			logger.Errorf("add record %s %s error: %v", d.SubDomain, p.dnsConf.RecordValue, err)
 			errorList = append(errorList, d)
 			continue
 		}
-		log.Printf("%s:%s add record %s %s success\n", p.name, domain, create.Name, create.Value)
+		logger.Infof("add record %s %s success", create.Name, create.Value)
 	}
-	log.Printf("%s:all record add success\n", p.name)
+	logger.Printf("all record add success")
 	return nil
 }

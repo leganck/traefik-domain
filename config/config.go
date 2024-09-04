@@ -4,13 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"github.com/joho/godotenv"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 )
 
-var confPath = flag.String("conf", os.Getenv("conf"), "config path")
+var confPath = flag.String("conf", os.Getenv("CONF"), "config path")
+
+var logLevel = flag.String("log-level", os.Getenv("LOG_LEVEL"), "config path")
 
 var traefikHost = flag.String("traefik-host", os.Getenv("TRAEFIK_HOST"), "traefik url")
 
@@ -30,6 +33,14 @@ var adGuardHost = flag.String("ad-guard-host", os.Getenv("AD_GUARD_HOST"), "adGu
 
 var fileConfig = make(map[string]string)
 
+var logConfig = map[string]int{
+	"time":     0,
+	"level":    1,
+	"provider": 2,
+	"domain":   3,
+	"msg":      4,
+}
+
 type Config struct {
 	Name         string
 	ID           string
@@ -38,6 +49,7 @@ type Config struct {
 	RecordValue  string
 	RecordType   string
 	PollInterval int
+	LogLevel     log.Level
 }
 
 func init() {
@@ -77,11 +89,31 @@ func init() {
 		if *adGuardHost == "" {
 			*adGuardHost = fileConfig["AD_GUARD_HOST"]
 		}
+		if *logLevel == "" {
+			s, ok := fileConfig["LOG_LEVEL"]
+			if ok {
+				*logLevel = s
+			} else {
+				*logLevel = "info"
+			}
+		}
 	}
 
 }
 
 func GetConfig() (*Config, error) {
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Errorf("invalid log level %s", *logLevel)
+	}
+	log.SetFormatter(&log.TextFormatter{
+		SortingFunc: func(keys []string) {
+			sort.Slice(keys, func(i, j int) bool {
+				return logConfig[keys[i]] < logConfig[keys[j]]
+			})
+		},
+	})
+	log.SetLevel(level)
 
 	if *dnsName == "" || *dnsId == "" || *dnsSecret == "" {
 		return nil, fmt.Errorf("invalid dns config")
@@ -120,6 +152,7 @@ func GetConfig() (*Config, error) {
 		RecordType:   RecordType,
 		Refresh:      *dnsRefresh,
 		PollInterval: pollInterval,
+		LogLevel:     level,
 	}, nil
 }
 

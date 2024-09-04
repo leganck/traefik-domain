@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/leganck/docker-traefik-domain/config"
 	"github.com/leganck/docker-traefik-domain/util"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/publicsuffix"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -58,7 +58,7 @@ func TraefikDomains() (map[string][]*Domain, error) {
 	var routers []RouterInfo
 	err = json.Unmarshal(all, &routers)
 	if err != nil {
-		log.Printf("json解析异常 %s\n", all)
+		log.Errorf("json解析异常 %s", all)
 		return nil, fmt.Errorf("json解析异常 %s", all)
 	}
 
@@ -78,10 +78,10 @@ func TraefikDomains() (map[string][]*Domain, error) {
 	domainMap := make(map[string][]*Domain)
 
 	for domain, _ := range domains {
+		log.Debugf("traefik domain: %v", domain)
 		mainDomain, err := publicsuffix.EffectiveTLDPlusOne(domain)
 		if err != nil {
-			log.Println("域名解析异常: %s", domain)
-			log.Println("异常信息: %s", err)
+			log.Errorf("域名解析异常: %s,%v", domain, err)
 			continue
 		}
 
@@ -98,7 +98,6 @@ func TraefikDomains() (map[string][]*Domain, error) {
 		}
 		domainMap[mainDomain] = append(domainMap[mainDomain], domain)
 	}
-
 	return domainMap, nil
 }
 
@@ -111,7 +110,7 @@ func getTraefikUrl() (string, string, string) {
 	}
 	parse, err := url.Parse(traefikUrl + router)
 	if err != nil {
-		log.Printf("url解析异常:%s %s", traefikUrl, err)
+		log.Errorf("url解析异常:%s %s", traefikUrl, err)
 	}
 	return parse.String(), username, password
 

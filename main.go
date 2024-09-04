@@ -4,8 +4,8 @@ import (
 	"github.com/leganck/docker-traefik-domain/config"
 	"github.com/leganck/docker-traefik-domain/dns"
 	"github.com/leganck/docker-traefik-domain/traefik"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
-	"log"
 	"sync"
 	"time"
 )
@@ -13,14 +13,14 @@ import (
 var mutex = sync.Mutex{}
 
 func main() {
-
 	conf, err := config.GetConfig()
 	if err != nil {
-		log.Printf("get config error: %v", err)
-		return
+		log.Errorf("config error: %v", err)
+		panic(err)
 	}
 	timer := time.Tick(time.Duration(conf.PollInterval) * time.Second)
 	ctx := context.Background()
+	log.Infof("start provider:%s", conf.Name)
 	upRecord(conf)
 	for {
 		select {
@@ -39,7 +39,6 @@ func main() {
 func upRecord(conf *config.Config) {
 	if mutex.TryLock() {
 		defer mutex.Unlock()
-
 		provider, err := dns.NewDNSProvider(conf)
 		if err != nil {
 			panic(err)
