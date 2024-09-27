@@ -5,6 +5,7 @@ import (
 	"github.com/gmichels/adguard-client-go"
 	"github.com/leganck/docker-traefik-domain/config"
 	"github.com/leganck/docker-traefik-domain/traefik"
+	log "github.com/sirupsen/logrus"
 )
 
 var scheme = "http"
@@ -25,7 +26,7 @@ func (a *AdGuard) Init(dnsConf *config.Config) error {
 	client, _ := adguard.NewClient(&adGuardHost, &dnsConf.ID, &dnsConf.Secret, &scheme, &timeout)
 	a.client = client
 	a.dnsConf = dnsConf
-	logger = logger.WithField("provider", "adguard")
+	logger = log.WithField("provider", a.name)
 	return nil
 }
 func (p *AdGuard) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
