@@ -19,11 +19,10 @@ func (p *DnsPod) Init(dnsConf *config.Config, log *log.Entry) error {
 	return nil
 }
 
-func (p *DnsPod) List(domain string, recordType string) ([]*model.Record, error) {
+func (p *DnsPod) List(domain string) ([]*model.Record, error) {
 
 	list, _, err := p.client.Records.List(dnspod.ListParams{
 		RecordParam: &dnspod.RecordParam{Domain: domain},
-		RecordType:  recordType,
 	})
 
 	records := make([]*model.Record, 0)
@@ -73,7 +72,7 @@ func (p *DnsPod) AddRecord(value, recordType string, list []*traefik.Domain) err
 	}
 	var errorList []*traefik.Domain
 	for _, d := range list {
-		create, _, err := p.client.Records.Create(d.Domain, "", dnspod.Record{
+		create, _, err := p.client.Records.Create(d.MainDomain, "", dnspod.Record{
 			Name:   d.SubDomain,
 			Type:   recordType,
 			Value:  value,

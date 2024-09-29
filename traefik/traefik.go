@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/leganck/docker-traefik-domain/config"
+	"github.com/leganck/docker-traefik-domain/dns/model"
 	"github.com/leganck/docker-traefik-domain/util"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/publicsuffix"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,7 +15,7 @@ import (
 )
 
 type Domain struct {
-	Domain       string `json:"domain"`
+	MainDomain   string `json:"domain"`
 	SubDomain    string `json:"sub"`
 	CustomDomain string `json:"customDomain"`
 }
@@ -79,20 +79,14 @@ func TraefikDomains() (map[string][]*Domain, error) {
 
 	for domain, _ := range domains {
 		log.Debugf("traefik domain: %v", domain)
-		mainDomain, err := publicsuffix.EffectiveTLDPlusOne(domain)
+		subDomain, mainDomain, err := model.SplitDomain(domain)
 		if err != nil {
-			log.Errorf("域名解析异常: %s,%v", domain, err)
+			log.Errorf("parse domain : %s  failed : %v", domain, err)
 			continue
 		}
 
-		domainLen := len(domain) - len(mainDomain) - 1
-		subDomain := "@"
-		if domainLen > 0 {
-			subDomain = domain[:domainLen]
-		}
-
 		domain := &Domain{
-			Domain:       mainDomain,
+			MainDomain:   mainDomain,
 			SubDomain:    subDomain,
 			CustomDomain: domain,
 		}

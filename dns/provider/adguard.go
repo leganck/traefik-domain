@@ -7,7 +7,6 @@ import (
 	"github.com/leganck/docker-traefik-domain/dns/model"
 	"github.com/leganck/docker-traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/publicsuffix"
 )
 
 var scheme = "http"
@@ -30,7 +29,7 @@ func (a *AdGuard) Init(dnsConf *config.Config, log *log.Entry) error {
 	return nil
 }
 
-func (p *AdGuard) List(domain string, recordType string) ([]*model.Record, error) {
+func (p *AdGuard) List(domain string) ([]*model.Record, error) {
 	rewrites, err := p.client.GetAllRewrites()
 	if err != nil {
 		p.logger.Errorf("GetAllRewrites failed: %v", err)
@@ -38,24 +37,17 @@ func (p *AdGuard) List(domain string, recordType string) ([]*model.Record, error
 	}
 	result := make([]*model.Record, 0)
 	for _, re := range *rewrites {
-		customDomain := re.Domain
-		mainDomain, err := publicsuffix.EffectiveTLDPlusOne(customDomain)
+		subDomain, mainDomain, err := model.SplitDomain(re.Domain)
 		if err != nil {
-			p.logger.Warningf("MainDomain name resolution exception: %s,%v", customDomain, err)
+			p.logger.Errorf("parse domain : %s  failed : %v", re.Domain, err)
 			continue
 		}
 		if mainDomain == domain {
-			domainLen := len(customDomain) - len(mainDomain) - 1
-			subDomain := ""
-			if domainLen > 0 {
-				subDomain = customDomain[:domainLen]
-			}
 			result = append(result, &model.Record{
 				Name:         subDomain,
 				MainDomain:   mainDomain,
-				CustomDomain: customDomain,
+				CustomDomain: re.Domain,
 				Value:        re.Answer,
-				Type:         recordType,
 			})
 		}
 	}

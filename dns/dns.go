@@ -13,7 +13,7 @@ import (
 type DnsProvider interface {
 	Init(dnsConf *config.Config, log *log.Entry) error
 
-	List(domain string, recordType string) ([]*model.Record, error)
+	List(domain string) ([]*model.Record, error)
 
 	AddRecord(value, recordType string, list []*traefik.Domain) error
 
@@ -38,6 +38,8 @@ func NewDNSProvider(dnsConf *config.Config) (*Provider, error) {
 		dnsProvider = &provider.DnsPod{}
 	case "adguard":
 		dnsProvider = &provider.AdGuard{}
+	case "cloudflare":
+		dnsProvider = &provider.Cloudflare{}
 	default:
 		return nil, fmt.Errorf("dns provider %s not found", providerName)
 	}
@@ -56,7 +58,7 @@ func NewDNSProvider(dnsConf *config.Config) (*Provider, error) {
 func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
 	domainMap := make(map[string]*model.Record)
 
-	list, err := p.provider.List(domain, p.dnsConf.RecordType)
+	list, err := p.provider.List(domain)
 	for _, d := range list {
 		domainMap[d.Name] = d
 	}
