@@ -3,37 +3,96 @@ package dns
 import (
 	"fmt"
 	"github.com/leganck/docker-traefik-domain/config"
+	"github.com/leganck/docker-traefik-domain/dns/model"
+	"github.com/leganck/docker-traefik-domain/dns/provider"
 	"github.com/leganck/docker-traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 	"strings"
 )
 
-var logger *log.Entry
-
 type DnsProvider interface {
-	Init(dnsConf *config.Config) error
+	Init(dnsConf *config.Config, log *log.Entry) error
 
-	AddOrUpdateCname(domain string, domains []*traefik.Domain) error
+	List(domain string, recordType string) ([]*model.Record, error)
+
+	AddRecord(value, recordType string, list []*traefik.Domain) error
+
+	UpdateRecord(value string, updateList []*model.Record) error
 }
 
-func NewDNSProvider(dnsConf *config.Config) (DnsProvider, error) {
+type Provider struct {
+	logger   *log.Entry
+	name     string
+	dnsConf  *config.Config
+	provider DnsProvider
+}
+
+func NewDNSProvider(dnsConf *config.Config) (*Provider, error) {
+	providerName := strings.ToLower(dnsConf.Name)
+
+	logger := log.WithFields(log.Fields{"provider": providerName})
+
 	var dnsProvider DnsProvider
-	switch strings.ToLower(dnsConf.Name) {
+	switch providerName {
 	case "dnspod":
-		dnsProvider = &DnsPod{
-			name: dnsConf.Name,
-		}
+		dnsProvider = &provider.DnsPod{}
 	case "adguard":
-		dnsProvider = &AdGuard{
-			name: dnsConf.Name,
-		}
+		dnsProvider = &provider.AdGuard{}
 	default:
-		return nil, fmt.Errorf("dns provider %s not found", dnsConf.Name)
+		return nil, fmt.Errorf("dns provider %s not found", providerName)
 	}
-	err := dnsProvider.Init(dnsConf)
+	err := dnsProvider.Init(dnsConf, logger)
 	if err != nil {
-		return nil, fmt.Errorf("init dns provider %s error: %s", dnsConf.Name, err)
+		return nil, fmt.Errorf("init dns provider %s error: %s", providerName, err)
+	}
+	return &Provider{
+		logger:   logger,
+		dnsConf:  dnsConf,
+		name:     providerName,
+		provider: dnsProvider,
+	}, nil
+}
+
+func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
+	domainMap := make(map[string]*model.Record)
+
+	list, err := p.provider.List(domain, p.dnsConf.RecordType)
+	for _, d := range list {
+		domainMap[d.Name] = d
 	}
 
-	return dnsProvider, nil
+	if err != nil {
+		p.logger.Warningf("'%s' List error: %v", domain, err)
+		return err
+	}
+	var updateList = make([]*model.Record, 0)
+	var addList []*traefik.Domain
+
+	for _, d := range domains {
+		record, ok := domainMap[d.SubDomain]
+		if ok {
+			if record.Value != p.dnsConf.RecordValue {
+				updateList = append(updateList, &model.Record{
+					Id:         record.Id,
+					Name:       record.Name,
+					Value:      p.dnsConf.RecordValue,
+					Type:       record.Type,
+					MainDomain: domain,
+				})
+			}
+		} else {
+			addList = append(addList, d)
+		}
+	}
+
+	err = p.provider.AddRecord(p.dnsConf.RecordValue, p.dnsConf.RecordType, addList)
+	if err != nil {
+		return err
+	}
+	err = p.provider.UpdateRecord(domain, updateList)
+	if err != nil {
+		return err
+	}
+	return nil
+
 }
