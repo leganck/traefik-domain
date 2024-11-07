@@ -3,9 +3,9 @@ package provider
 import (
 	"fmt"
 	cf "github.com/cloudflare/cloudflare-go"
-	"github.com/leganck/docker-traefik-domain/config"
-	"github.com/leganck/docker-traefik-domain/dns/model"
-	"github.com/leganck/docker-traefik-domain/traefik"
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/model"
+	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )

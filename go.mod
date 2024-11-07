@@ -1,4 +1,4 @@
-module github.com/leganck/docker-traefik-domain
+module github.com/leganck/traefik-domain
 
 go 1.22.4
 

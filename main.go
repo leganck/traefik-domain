@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/leganck/docker-traefik-domain/config"
-	"github.com/leganck/docker-traefik-domain/dns"
-	"github.com/leganck/docker-traefik-domain/traefik"
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns"
+	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"sync"

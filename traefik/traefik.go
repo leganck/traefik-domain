@@ -3,9 +3,9 @@ package traefik
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/leganck/docker-traefik-domain/config"
-	"github.com/leganck/docker-traefik-domain/dns/model"
-	"github.com/leganck/docker-traefik-domain/util"
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/model"
+	"github.com/leganck/traefik-domain/util"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -77,7 +77,7 @@ func TraefikDomains() (map[string][]*Domain, error) {
 
 	domainMap := make(map[string][]*Domain)
 
-	for domain, _ := range domains {
+	for domain := range domains {
 		log.Debugf("traefik domain: %v", domain)
 		subDomain, mainDomain, err := model.SplitDomain(domain)
 		if err != nil {

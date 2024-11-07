@@ -2,10 +2,10 @@ package dns
 
 import (
 	"fmt"
-	"github.com/leganck/docker-traefik-domain/config"
-	"github.com/leganck/docker-traefik-domain/dns/model"
-	"github.com/leganck/docker-traefik-domain/dns/provider"
-	"github.com/leganck/docker-traefik-domain/traefik"
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/model"
+	"github.com/leganck/traefik-domain/dns/provider"
+	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 	"strings"
 )
