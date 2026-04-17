@@ -2,6 +2,8 @@ package provider
 
 import (
 	"fmt"
+	"sync"
+
 	cf "github.com/cloudflare/cloudflare-go"
 	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
@@ -16,7 +18,10 @@ type Cloudflare struct {
 	background context.Context
 }
 
-var domainZone = map[string]*cf.ResourceContainer{}
+var (
+	domainZone = map[string]*cf.ResourceContainer{}
+	zoneMutex  sync.RWMutex
+)
 
 func (p *Cloudflare) Init(dnsConf *config.Config, log *log.Entry) error {
 	apiClient, err := cf.NewWithAPIToken(dnsConf.Secret)
@@ -124,8 +129,12 @@ func (p *Cloudflare) AddRecord(value, recordType string, list []*traefik.Domain)
 }
 
 func (p *Cloudflare) zoneIdentifier(domain string) (*cf.ResourceContainer, error) {
-	if domainZone[domain] != nil {
-		return domainZone[domain], nil
+	zoneMutex.RLock()
+	zone, exists := domainZone[domain]
+	zoneMutex.RUnlock()
+
+	if exists {
+		return zone, nil
 	}
 
 	zones, err := p.client.ListZones(p.background, domain)
@@ -140,6 +149,8 @@ func (p *Cloudflare) zoneIdentifier(domain string) (*cf.ResourceContainer, error
 	}
 
 	zoneIdentifier := cf.ZoneIdentifier(zones[0].ID)
+	zoneMutex.Lock()
 	domainZone[domain] = zoneIdentifier
+	zoneMutex.Unlock()
 	return zoneIdentifier, err
 }

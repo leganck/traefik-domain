@@ -3,16 +3,24 @@ package traefik
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/leganck/traefik-domain/config"
-	"github.com/leganck/traefik-domain/dns/model"
-	"github.com/leganck/traefik-domain/util"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/model"
+	"github.com/leganck/traefik-domain/util"
+	log "github.com/sirupsen/logrus"
 )
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
+
+var hostRegex = regexp.MustCompile("Host\\(`([a-zA-Z0-9.\\-]+)`\\)")
 
 type Domain struct {
 	MainDomain   string `json:"domain"`
@@ -47,13 +55,23 @@ func TraefikDomains() (map[string][]*Domain, error) {
 	}
 	// Set the auth for the request.
 	req.SetBasicAuth(username, password)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Println(err)
+		log.Errorf("HTTP request failed: %v", err)
+		return nil, err
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Errorf("HTTP status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("HTTP status %d", resp.StatusCode)
 	}
 	all, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println(err)
+		log.Errorf("read response body failed: %v", err)
+		return nil, err
 	}
 	var routers []RouterInfo
 	err = json.Unmarshal(all, &routers)
@@ -63,10 +81,9 @@ func TraefikDomains() (map[string][]*Domain, error) {
 	}
 
 	domains := make(map[string]int)
-	expr := regexp.MustCompile("Host\\(`([a-zA-Z0-9.\\-]+)`\\)")
 	for _, router := range routers {
 		if router.Status == "enabled" {
-			routerDomain := expr.FindAllStringSubmatch(router.Rule, -1)
+			routerDomain := hostRegex.FindAllStringSubmatch(router.Rule, -1)
 			for _, domainArray := range routerDomain {
 				domain := domainArray[1]
 				domains[domain]++

@@ -59,14 +59,15 @@ func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) er
 	domainMap := make(map[string]*model.Record)
 
 	list, err := p.provider.List(domain)
-	for _, d := range list {
-		domainMap[d.Name] = d
-	}
-
 	if err != nil {
 		p.logger.Warningf("'%s' List error: %v", domain, err)
 		return err
 	}
+
+	for _, d := range list {
+		domainMap[d.Name] = d
+	}
+
 	var updateList = make([]*model.Record, 0)
 	var addList []*traefik.Domain
 

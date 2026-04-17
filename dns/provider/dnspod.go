@@ -50,7 +50,7 @@ func (p *DnsPod) UpdateRecord(value string, updateList []*model.Record) error {
 			_, _, err := p.client.Records.Update("", record.MainDomain, record.Id, dnspod.Record{
 				Name:  record.Name,
 				Type:  record.Type,
-				Value: record.Value,
+				Value: value,
 				Line:  "默认",
 			})
 			if err != nil {
