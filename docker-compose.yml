@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  traefik-domain:
+    image: leganck/traefik-domain:latest
+    container_name: traefik-domain
+    restart: unless-stopped
+    environment:
+      - TRAEFIK_HOST=http://traefik:8080
+      - POLL_INTERVAL=5
+      - LOG_LEVEL=info
+      - DNS_NAME=dnspod
+      - DNS_ID=your_dns_id
+      - DNS_SECRET=your_dns_secret
+      - DNS_RECORD_VALUE=192.168.1.1
+      - DNS_REFRESH=false
+    # volumes:
+    #   - ./config.yaml:/app/config.yaml
+    # networks:
+    #   - traefik-network
+
+  # DNSPod 示例
+  # traefik-domain-dnspod:
+  #   image: leganck/traefik-domain:latest
+  #   container_name: traefik-domain-dnspod
+  #   restart: unless-stopped
+  #   environment:
+  #     - TRAEFIK_HOST=http://traefik:8080
+  #     - POLL_INTERVAL=5
+  #     - DNS_NAME=dnspod
+  #     - DNS_ID=your_dnspod_id
+  #     - DNS_SECRET=your_dnspod_secret
+  #     - DNS_RECORD_VALUE=192.168.1.1
+  #   networks:
+  #     - traefik-network
+
+  # AdGuard 示例
+  # traefik-domain-adguard:
+  #   image: leganck/traefik-domain:latest
+  #   container_name: traefik-domain-adguard
+  #   restart: unless-stopped
+  #   environment:
+  #     - TRAEFIK_HOST=http://traefik:8080
+  #     - POLL_INTERVAL=5
+  #     - DNS_NAME=adguard
+  #     - DNS_ID=adguard_username
+  #     - DNS_SECRET=adguard_password
+  #     - DNS_RECORD_VALUE=192.168.1.1
+  #     - AD_GUARD_HOST=http://adguard:3000
+  #   networks:
+  #     - traefik-network
+
+  # Cloudflare 示例
+  # traefik-domain-cloudflare:
+  #   image: leganck/traefik-domain:latest
+  #   container_name: traefik-domain-cloudflare
+  #   restart: unless-stopped
+  #   environment:
+  #     - TRAEFIK_HOST=http://traefik:8080
+  #     - POLL_INTERVAL=5
+  #     - DNS_NAME=cloudflare
+  #     - DNS_ID=cloudflare_api_token
+  #     - DNS_SECRET=cloudflare_zone_id
+  #     - DNS_RECORD_VALUE=your-server.example.com
+  #   networks:
+  #     - traefik-network
+
+  # OpenWRT 示例
+  # traefik-domain-openwrt:
+  #   image: leganck/traefik-domain:latest
+  #   container_name: traefik-domain-openwrt
+  #   restart: unless-stopped
+  #   environment:
+  #     - TRAEFIK_HOST=http://traefik:8080
+  #     - POLL_INTERVAL=5
+  #     - DNS_NAME=openwrt
+  #     - DNS_ID=openwrt_username
+  #     - DNS_SECRET=openwrt_password
+  #     - DNS_RECORD_VALUE=192.168.1.1
+  #     - OPENWRT_HOST=http://openwrt:80
+  #   networks:
+  #     - traefik-network
+
+  # Traefik 示例（如需在同一 compose 中启动）
+  # traefik:
+  #   image: traefik:v3.0
+  #   container_name: traefik
+  #   command:
+  #     - "--api.insecure=true"
+  #     - "--providers.docker=true"
+  #     - "--providers.docker.exposedbydefault=false"
+  #     - "--entrypoints.web.address=:80"
+  #   ports:
+  #     - "80:80"
+  #     - "8080:8080"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   networks:
+  #     - traefik-network
+
+# networks:
+#   traefik-network:
+#     external: true
