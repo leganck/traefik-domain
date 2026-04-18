@@ -34,6 +34,7 @@ type Config struct {
 	LogLevel     log.Level
 	TraefikHost  string
 	AdGuardHost  string
+	OpenWRTHost  string
 }
 
 func init() {
@@ -66,6 +67,7 @@ func init() {
 	v.RegisterAlias("DNS_REFRESH", "dns.refresh")
 	v.RegisterAlias("DNS_RECORD_VALUE", "dns.record.value")
 	v.RegisterAlias("AD_GUARD_HOST", "adguard.host")
+	v.RegisterAlias("OPENWRT_HOST", "openwrt.host")
 	v.RegisterAlias("LOG_LEVEL", "log.level")
 }
 
@@ -124,6 +126,7 @@ func GetConfig() (*Config, error) {
 		LogLevel:     level,
 		TraefikHost:  v.GetString("traefik.host"),
 		AdGuardHost:  v.GetString("adguard.host"),
+		OpenWRTHost:  v.GetString("openwrt.host"),
 	}, nil
 }
 
@@ -158,6 +161,10 @@ func GetTraefikHost() string {
 
 func GetAdGuardHost() string {
 	return v.GetString("adguard.host")
+}
+
+func GetOpenWRTHost() string {
+	return v.GetString("openwrt.host")
 }
 
 func ReloadConfig() error {

@@ -40,6 +40,8 @@ func NewDNSProvider(dnsConf *config.Config) (*Provider, error) {
 		dnsProvider = &provider.AdGuard{}
 	case "cloudflare":
 		dnsProvider = &provider.Cloudflare{}
+	case "openwrt":
+		dnsProvider = &provider.OpenWRT{}
 	default:
 		return nil, fmt.Errorf("dns provider %s not found", providerName)
 	}
