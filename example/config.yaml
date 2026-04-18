@@ -1,0 +1,33 @@
+traefik:
+  host: "http://traefik:8080"
+  # username: "admin"
+  # password: "secret"
+  # ip: ""                    # 自定义连接 IP（用于域名解析到多 IP 的场景）
+
+dns:
+  use: "dnspod"                # 支持：dnspod / adguard / cloudflare / openwrt
+  record: "192.168.1.1"        # DNS 记录值，支持 IPv4（A）、IPv6（AAAA）、域名（CNAME）
+  # record_type: ""            # 可选，留空则自动检测
+
+  # DNSPod 配置
+  dnsPod:
+    loginToken: "your_dnspod_login_token"
+
+  # AdGuard 配置
+  # adGuard:
+  #   host: "http://adguard:3000"
+  #   username: "admin"
+  #   password: "password"
+
+  # Cloudflare 配置
+  # cloudflare:
+  #   apiToken: "your_cloudflare_api_token"
+
+  # OpenWRT 配置
+  # openWrt:
+  #   host: "http://openwrt:80"
+  #   username: "root"
+  #   password: "password"
+
+log_level: "info"               # debug / info / warn / error
+poll_interval: 5                # 轮询间隔（秒）

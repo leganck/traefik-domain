@@ -31,7 +31,7 @@ services:
       - DNS_RECORD_VALUE=192.168.1.1
 ```
 
-更多示例请参考 [docker-compose.yml](docker-compose.yml)。
+更多示例请参考 [example/docker-compose.yml](example/docker-compose.yml)。
 
 ### Docker Run
 
@@ -95,26 +95,21 @@ make build
 
 ### config.yaml 示例
 
+完整配置示例请参考 [example/config.yaml](example/config.yaml)。
+
 ```yaml
 traefik:
   host: "http://traefik:8080"
 
-poll:
-  interval: 5
-
 dns:
-  name: "dnspod"
-  id: "your_dns_id"
-  secret: "your_dns_secret"
-  record:
-    value: "192.168.1.1"
-  refresh: false
+  use: "dnspod"
+  record: "192.168.1.1"
 
-adguard:
-  host: "http://adguard:3000"
+  dnsPod:
+    loginToken: "your_dnspod_login_token"
 
-log:
-  level: "info"
+log_level: "info"
+poll_interval: 5
 ```
 
 配置文件搜索路径：`./config.yaml` → `./config/config.yaml` → `/etc/traefik-domain/config.yaml` → `~/.traefik-domain/config.yaml`
@@ -131,54 +126,50 @@ log:
 
 ## DNS 提供商配置示例
 
+> 完整配置示例请参考 [example/config.yaml](example/config.yaml)
+
 ### DNSPod
 
 ```yaml
 dns:
-  name: "dnspod"
-  id: "your_dnspod_id"
-  secret: "your_dnspod_token"
-  record:
-    value: "192.168.1.1"
+  use: "dnspod"
+  record: "192.168.1.1"
+  dnsPod:
+    loginToken: "your_dnspod_login_token"
 ```
 
 ### AdGuard
 
 ```yaml
 dns:
-  name: "adguard"
-  id: "admin"
-  secret: "password"
-  record:
-    value: "192.168.1.1"
-
-adguard:
-  host: "http://adguard:3000"
+  use: "adguard"
+  record: "192.168.1.1"
+  adGuard:
+    host: "http://adguard:3000"
+    username: "admin"
+    password: "password"
 ```
 
 ### Cloudflare
 
 ```yaml
 dns:
-  name: "cloudflare"
-  id: "your_api_token"
-  secret: "your_zone_id"
-  record:
-    value: "server.example.com"
+  use: "cloudflare"
+  record: "server.example.com"
+  cloudflare:
+    apiToken: "your_cloudflare_api_token"
 ```
 
 ### OpenWRT
 
 ```yaml
 dns:
-  name: "openwrt"
-  id: "root"
-  secret: "password"
-  record:
-    value: "192.168.1.1"
-
-openwrt:
-  host: "http://openwrt:80"
+  use: "openwrt"
+  record: "192.168.1.1"
+  openWrt:
+    host: "http://openwrt:80"
+    username: "root"
+    password: "password"
 ```
 
 ## Traefik 认证
@@ -210,7 +201,9 @@ TRAEFIK_HOST=admin:secretpassword@traefik:8080
 ├── traefik/traefik.go     # Traefik API 客户端
 ├── util/                  # 工具函数
 ├── Dockerfile
-├── docker-compose.yml
+├── example/                # 示例文件
+│   ├── docker-compose.yml
+│   └── config.yaml
 ├── Makefile
 └── .goreleaser.yml
 ```
