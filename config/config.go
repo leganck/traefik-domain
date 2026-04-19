@@ -24,17 +24,20 @@ var (
 )
 
 type Config struct {
-	Name         string
-	ID           string
-	Secret       string
-	Refresh      bool
-	RecordValue  string
-	RecordType   string
-	PollInterval int
-	LogLevel     log.Level
-	TraefikHost  string
-	AdGuardHost  string
-	OpenWRTHost  string
+	Name           string
+	ID             string
+	Secret         string
+	Refresh        bool
+	RecordValue    string
+	RecordType     string
+	PollInterval   int
+	LogLevel       log.Level
+	TraefikHost    string
+	AdGuardHost    string
+	OpenWRTHost    string
+	WebEnabled     bool
+	WebPort        int
+	WebConfigPath  string
 }
 
 func init() {
@@ -45,6 +48,9 @@ func init() {
 	v.SetDefault("poll-interval", 5)
 	v.SetDefault("log-level", "info")
 	v.SetDefault("dns-refresh", false)
+	v.SetDefault("web-enabled", false)
+	v.SetDefault("web-port", 8080)
+	v.SetDefault("web-config-path", "./switch-config.json")
 
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
@@ -69,6 +75,9 @@ func init() {
 	v.RegisterAlias("AD_GUARD_HOST", "adguard.host")
 	v.RegisterAlias("OPENWRT_HOST", "openwrt.host")
 	v.RegisterAlias("LOG_LEVEL", "log.level")
+	v.RegisterAlias("WEB_ENABLED", "web.enabled")
+	v.RegisterAlias("WEB_PORT", "web.port")
+	v.RegisterAlias("WEB_CONFIG_PATH", "web.config.path")
 }
 
 func GetConfig() (*Config, error) {
@@ -116,17 +125,20 @@ func GetConfig() (*Config, error) {
 	}
 
 	return &Config{
-		Name:         dnsName,
-		ID:           dnsID,
-		Secret:       dnsSecret,
-		Refresh:      v.GetBool("dns.refresh"),
-		RecordValue:  finalValue,
-		RecordType:   recordType,
-		PollInterval: pollInterval,
-		LogLevel:     level,
-		TraefikHost:  v.GetString("traefik.host"),
-		AdGuardHost:  v.GetString("adguard.host"),
-		OpenWRTHost:  v.GetString("openwrt.host"),
+		Name:          dnsName,
+		ID:            dnsID,
+		Secret:        dnsSecret,
+		Refresh:       v.GetBool("dns.refresh"),
+		RecordValue:   finalValue,
+		RecordType:    recordType,
+		PollInterval:  pollInterval,
+		LogLevel:      level,
+		TraefikHost:   v.GetString("traefik.host"),
+		AdGuardHost:   v.GetString("adguard.host"),
+		OpenWRTHost:   v.GetString("openwrt.host"),
+		WebEnabled:    v.GetBool("web.enabled"),
+		WebPort:       v.GetInt("web.port"),
+		WebConfigPath: v.GetString("web.config.path"),
 	}, nil
 }
 

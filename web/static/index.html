@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>域名同步管理 | Traefik Domain</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>域名同步管理</h1>
+      <p class="subtitle">管理从 Traefik 自动发现的域名在 DNS 提供商之间的同步</p>
+    </header>
+
+    <main>
+      <!-- Global Provider Toggles -->
+      <section class="card">
+        <h2 class="card-title">全局提供商设置</h2>
+        <div class="global-toggles" id="globalToggles">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Domain Table -->
+      <section class="card">
+        <h2 class="card-title">域名列表</h2>
+        <div id="domainTableContainer">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+            <p>正在加载域名列表...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <div class="toast-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <span id="toastMessage">已保存</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
