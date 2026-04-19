@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	cf "github.com/cloudflare/cloudflare-go"
-	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
@@ -23,8 +22,8 @@ var (
 	zoneMutex  sync.RWMutex
 )
 
-func (p *Cloudflare) Init(dnsConf *config.Config, log *log.Entry) error {
-	apiClient, err := cf.NewWithAPIToken(dnsConf.Secret)
+func (p *Cloudflare) Init(cfg *ProviderConfig, log *log.Entry) error {
+	apiClient, err := cf.NewWithAPIToken(cfg.Secret)
 	if err != nil {
 		log.Errorf("init cloudflare client error: %v", err)
 		return fmt.Errorf("init cloudflare client error: %v", err)
@@ -125,6 +124,26 @@ func (p *Cloudflare) AddRecord(value, recordType string, list []*traefik.Domain)
 		p.logger.Infof("add record %s %s success", d.CustomDomain, value)
 	}
 	p.logger.Printf("all record add success")
+	return nil
+}
+
+func (p *Cloudflare) DeleteRecord(list []*model.Record) error {
+	if len(list) == 0 {
+		p.logger.Debugln("no record to delete")
+		return nil
+	}
+	for _, record := range list {
+		identifier, err := p.zoneIdentifier(record.MainDomain)
+		if err != nil {
+			p.logger.Errorf("get zone identifier error: %v", err)
+			continue
+		}
+		if err := p.client.DeleteDNSRecord(p.background, identifier, record.Id); err != nil {
+			p.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)
+			continue
+		}
+		p.logger.Infof("delete record %s success", record.CustomDomain)
+	}
 	return nil
 }
 

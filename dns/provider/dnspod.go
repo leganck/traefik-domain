@@ -2,7 +2,6 @@ package provider
 
 import (
 	"github.com/leganck/dnspod-go"
-	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
@@ -13,8 +12,8 @@ type DnsPod struct {
 	client *dnspod.Client
 }
 
-func (p *DnsPod) Init(dnsConf *config.Config, log *log.Entry) error {
-	p.client = dnspod.NewClient(dnspod.CommonParams{LoginToken: dnsConf.ID + "," + dnsConf.Secret, Format: "json"})
+func (p *DnsPod) Init(cfg *ProviderConfig, log *log.Entry) error {
+	p.client = dnspod.NewClient(dnspod.CommonParams{LoginToken: cfg.ID + "," + cfg.Secret, Format: "json"})
 	p.logger = log
 	return nil
 }
@@ -88,5 +87,21 @@ func (p *DnsPod) AddRecord(value, recordType string, list []*traefik.Domain) err
 		p.logger.Infof("add record %s %s success", d.CustomDomain, create.Value)
 	}
 	p.logger.Printf("all record add success")
+	return nil
+}
+
+func (p *DnsPod) DeleteRecord(list []*model.Record) error {
+	if len(list) == 0 {
+		p.logger.Debugln("no record to delete")
+		return nil
+	}
+	for _, record := range list {
+		_, err := p.client.Records.Delete(0, record.MainDomain, record.Id)
+		if err != nil {
+			p.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)
+			continue
+		}
+		p.logger.Infof("delete record %s success", record.CustomDomain)
+	}
 	return nil
 }
