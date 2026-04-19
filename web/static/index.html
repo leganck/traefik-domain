@@ -3,45 +3,127 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>域名同步管理 | Traefik Domain</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <title>Traefik Domain</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>域名同步管理</h1>
+      <h1>Traefik Domain</h1>
       <p class="subtitle">管理从 Traefik 自动发现的域名在 DNS 提供商之间的同步</p>
+      <nav class="page-tabs">
+        <button class="page-tab active" data-page="domains">域名管理</button>
+        <button class="page-tab" data-page="config">配置</button>
+      </nav>
     </header>
 
-    <main>
-      <!-- Global Provider Toggles -->
-      <section class="card">
-        <h2 class="card-title">全局提供商设置</h2>
-        <div class="global-toggles" id="globalToggles">
-          <div class="loading">
-            <div class="loading-spinner"></div>
-            <p>加载中...</p>
+    <div id="domains-page" class="page">
+      <main>
+        <section class="card">
+          <h2 class="card-title">全局提供商</h2>
+          <div class="global-toggles" id="globalToggles">
+            <div class="loading">
+              <div class="loading-spinner"></div>
+              <p>加载中...</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Domain Table -->
-      <section class="card">
-        <h2 class="card-title">域名列表</h2>
-        <div id="domainTableContainer">
-          <div class="loading">
-            <div class="loading-spinner"></div>
-            <p>正在加载域名列表...</p>
+        <section class="card">
+          <div class="card-header">
+            <h2 class="card-title">域名</h2>
+            <div class="refresh-controls">
+              <button id="refresh-btn" class="refresh-btn" title="刷新">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+                </svg>
+              </button>
+              <label class="auto-refresh-label">
+                <input type="checkbox" id="auto-refresh-toggle" checked>
+                <span class="auto-refresh-text">自动</span>
+              </label>
+            </div>
           </div>
-        </div>
-      </section>
-    </main>
+          <div id="domainTableContainer">
+            <div class="loading">
+              <div class="loading-spinner"></div>
+              <p>正在加载域名列表...</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="config-page" class="page hidden">
+      <main>
+        <section class="card">
+          <h2 class="card-title">Traefik 配置</h2>
+          <div class="form-group">
+            <label>Host</label>
+            <input type="text" id="tf-host" placeholder="192.168.1.1:8080">
+          </div>
+          <div class="form-group">
+            <label>Username（可选）</label>
+            <input type="text" id="tf-username" placeholder="admin">
+          </div>
+          <div class="form-group">
+            <label>Password（可选）</label>
+            <input type="password" id="tf-password" placeholder="password">
+          </div>
+          <button id="save-tf-btn" class="btn btn-primary">保存配置</button>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">DNS 提供商</h2>
+          <div id="providers-list"></div>
+          <button id="add-provider-btn" class="btn btn-secondary" style="margin-top: 12px;">+ 添加提供商</button>
+        </section>
+      </main>
+    </div>
   </div>
 
-  <!-- Toast Notification -->
+  <div id="provider-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modal-title">添加 DNS 提供商</h3>
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" id="p-name" placeholder="my-adguard">
+      </div>
+      <div class="form-group">
+        <label>类型</label>
+        <select id="p-type">
+          <option value="adguard">AdGuard Home</option>
+          <option value="cloudflare">Cloudflare</option>
+          <option value="dnspod">DNSPod</option>
+          <option value="openwrt">OpenWRT</option>
+        </select>
+      </div>
+      <div class="form-group" id="p-host-group">
+        <label>Host URL</label>
+        <input type="text" id="p-host" placeholder="http://192.168.1.2:3000">
+        <small>AdGuard 和 OpenWRT 需要</small>
+      </div>
+      <div class="form-group">
+        <label>ID / Username</label>
+        <input type="text" id="p-id" placeholder="admin 或 API ID">
+      </div>
+      <div class="form-group">
+        <label>Secret / Token / Password</label>
+        <input type="password" id="p-secret" placeholder="API Token 或密码">
+      </div>
+      <div class="form-group">
+        <label>记录值（IP 或 CNAME）</label>
+        <input type="text" id="p-record" placeholder="192.168.1.10">
+      </div>
+      <div class="modal-actions">
+        <button id="cancel-provider-btn" class="btn btn-secondary">取消</button>
+        <button id="save-provider-btn" class="btn btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast">
     <div class="toast-icon">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -51,6 +133,6 @@
     <span id="toastMessage">已保存</span>
   </div>
 
-  <script src="app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

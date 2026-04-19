@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	luci "github.com/leganck/traefik-domain/internal/luci"
 	"github.com/leganck/traefik-domain/traefik"
@@ -18,13 +17,12 @@ type OpenWRT struct {
 	client *luci.LuciClient
 }
 
-func (o *OpenWRT) Init(dnsConf *config.Config, logger *log.Entry) error {
-	openWRTHost := config.GetOpenWRTHost()
-	if openWRTHost == "" {
-		return fmt.Errorf("openwrt host is empty")
+func (o *OpenWRT) Init(cfg *ProviderConfig, logger *log.Entry) error {
+	if cfg.Host == "" {
+		return fmt.Errorf("openwrt host is required")
 	}
 
-	client, err := luci.NewLuciClient(openWRTHost, dnsConf.ID, dnsConf.Secret)
+	client, err := luci.NewLuciClient(cfg.Host, cfg.ID, cfg.Secret)
 	if err != nil {
 		return fmt.Errorf("create openwrt client failed: %v", err)
 	}
@@ -71,6 +69,25 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 	}
 
 	return resultRecords, nil
+}
+
+func (o *OpenWRT) DeleteRecord(list []*model.Record) error {
+	if len(list) == 0 {
+		o.logger.Debugln("no record to delete")
+		return nil
+	}
+
+	ctx := context.Background()
+	for _, record := range list {
+		if err := o.deleteRecordByName(ctx, record.CustomDomain); err != nil {
+			o.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)
+			continue
+		}
+		o.logger.Infof("delete record %s success", record.CustomDomain)
+	}
+
+	_, err := o.client.UCI(ctx, "commit", []string{"dhcp"})
+	return err
 }
 
 func (o *OpenWRT) AddRecord(value, recordType string, list []*traefik.Domain) error {

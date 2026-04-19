@@ -2,12 +2,22 @@ package provider
 
 import (
 	"fmt"
+
 	"github.com/gmichels/adguard-client-go"
-	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 )
+
+type ProviderConfig struct {
+	ProviderID  string
+	Name        string
+	Type        string
+	ID          string
+	Secret      string
+	Host        string
+	RecordValue string
+}
 
 var scheme = "http"
 
@@ -16,14 +26,12 @@ type AdGuard struct {
 	client *adguard.ADG
 }
 
-func (a *AdGuard) Init(dnsConf *config.Config, log *log.Entry) error {
+func (a *AdGuard) Init(cfg *ProviderConfig, log *log.Entry) error {
 	timeout := 10
-	adGuardHost := config.GetAdGuardHost()
-	if adGuardHost == "" {
-		return fmt.Errorf("adGuardHostAddr is empty")
-
+	if cfg.Host == "" {
+		return fmt.Errorf("adguard host is required")
 	}
-	client, _ := adguard.NewClient(&adGuardHost, &dnsConf.ID, &dnsConf.Secret, &scheme, &timeout)
+	client, _ := adguard.NewClient(&cfg.Host, &cfg.ID, &cfg.Secret, &scheme, &timeout)
 	a.client = client
 	a.logger = log
 	return nil
@@ -87,6 +95,21 @@ func (p *AdGuard) AddRecord(value, _ string, list []*traefik.Domain) error {
 			return fmt.Errorf("%s add failed: %v", d.CustomDomain, err)
 		}
 		p.logger.Printf(":%s add success: %v value", d.CustomDomain, rewrite.Domain)
+	}
+	return nil
+}
+
+func (p *AdGuard) DeleteRecord(list []*model.Record) error {
+	if len(list) == 0 {
+		p.logger.Debugln("no record to delete")
+		return nil
+	}
+	for _, d := range list {
+		if err := p.client.DeleteRewrite(d.CustomDomain); err != nil {
+			p.logger.Errorf("delete failed: %v", d.CustomDomain)
+			continue
+		}
+		p.logger.Infof("delete success: %v", d.CustomDomain)
 	}
 	return nil
 }

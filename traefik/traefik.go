@@ -10,9 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
-	"github.com/leganck/traefik-domain/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -47,14 +45,28 @@ type RouterInfo struct {
 	Provider    string   `json:"provider,omitempty"`
 }
 
-func TraefikDomains() (map[string][]*Domain, error) {
-	traefikUrl, username, password := getTraefikUrl()
-	req, err := http.NewRequest("GET", traefikUrl, nil)
+func TraefikDomains(host, username, password string) (map[string][]*Domain, error) {
+	if host == "" {
+		return nil, fmt.Errorf("traefik host is empty")
+	}
+
+	traefikUrl := host
+	if !strings.HasPrefix(traefikUrl, "http") {
+		traefikUrl = "http://" + traefikUrl
+	}
+	parse, err := url.Parse(traefikUrl + "/api/http/routers")
+	if err != nil {
+		log.Errorf("url解析异常:%s %s", traefikUrl, err)
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", parse.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	// Set the auth for the request.
-	req.SetBasicAuth(username, password)
+	if username != "" && password != "" {
+		req.SetBasicAuth(username, password)
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Errorf("HTTP request failed: %v", err)
@@ -112,17 +124,10 @@ func TraefikDomains() (map[string][]*Domain, error) {
 	return domainMap, nil
 }
 
-func getTraefikUrl() (string, string, string) {
-
-	traefikUrl, username, password := util.ParseUrl(config.GetTraefikHost())
-	var router = "/api/http/routers"
-	if !strings.HasPrefix(traefikUrl, "http") {
-		traefikUrl = "http://" + traefikUrl
+func FlattenDomains(domains map[string][]*Domain) []*Domain {
+	var result []*Domain
+	for _, list := range domains {
+		result = append(result, list...)
 	}
-	parse, err := url.Parse(traefikUrl + router)
-	if err != nil {
-		log.Errorf("url解析异常:%s %s", traefikUrl, err)
-	}
-	return parse.String(), username, password
-
+	return result
 }
