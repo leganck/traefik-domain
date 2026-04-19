@@ -2,12 +2,14 @@ package dns
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/dns/provider"
 	"github.com/leganck/traefik-domain/traefik"
+	"github.com/leganck/traefik-domain/web"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 
 type DnsProvider interface {
@@ -21,13 +23,14 @@ type DnsProvider interface {
 }
 
 type Provider struct {
-	logger   *log.Entry
-	name     string
-	dnsConf  *config.Config
-	provider DnsProvider
+	logger       *log.Entry
+	name         string
+	dnsConf      *config.Config
+	provider     DnsProvider
+	switchConfig *web.SwitchConfig
 }
 
-func NewDNSProvider(dnsConf *config.Config) (*Provider, error) {
+func NewDNSProvider(dnsConf *config.Config, switchConfig *web.SwitchConfig) (*Provider, error) {
 	providerName := strings.ToLower(dnsConf.Name)
 
 	logger := log.WithFields(log.Fields{"provider": providerName})
@@ -50,14 +53,36 @@ func NewDNSProvider(dnsConf *config.Config) (*Provider, error) {
 		return nil, fmt.Errorf("init dns provider %s error: %s", providerName, err)
 	}
 	return &Provider{
-		logger:   logger,
-		dnsConf:  dnsConf,
-		name:     providerName,
-		provider: dnsProvider,
+		logger:       logger,
+		dnsConf:      dnsConf,
+		name:         providerName,
+		provider:     dnsProvider,
+		switchConfig: switchConfig,
 	}, nil
 }
 
 func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
+	// Filter domains based on switch config
+	var filteredDomains []*traefik.Domain
+	if p.switchConfig != nil {
+		for _, d := range domains {
+			if p.switchConfig.ShouldSync(d.CustomDomain, p.name) {
+				filteredDomains = append(filteredDomains, d)
+			} else {
+				p.logger.Debugf("Skipping %s for provider %s (disabled)", d.CustomDomain, p.name)
+			}
+		}
+	} else {
+		// If no switch config, sync all domains
+		filteredDomains = domains
+	}
+
+	// If no domains to sync, return early
+	if len(filteredDomains) == 0 {
+		p.logger.Debugf("No domains to sync for provider %s", p.name)
+		return nil
+	}
+
 	domainMap := make(map[string]*model.Record)
 
 	list, err := p.provider.List(domain)
@@ -73,7 +98,7 @@ func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) er
 	var updateList = make([]*model.Record, 0)
 	var addList []*traefik.Domain
 
-	for _, d := range domains {
+	for _, d := range filteredDomains {
 		record, ok := domainMap[d.SubDomain]
 		if ok {
 			if record.Value != p.dnsConf.RecordValue {
@@ -99,5 +124,4 @@ func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) er
 		return err
 	}
 	return nil
-
 }

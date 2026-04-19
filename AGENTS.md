@@ -22,6 +22,30 @@ traefik/traefik.go # Traefik API 客户端
 - `DNS_ID`, `DNS_SECRET` / `dns.id`, `dns.secret` - 提供商凭证
 - `POLL_INTERVAL` / `poll.interval` - 轮询间隔（秒）
 
+## Web UI 配置
+
+支持通过 Web 界面管理域名在各 DNS 供应商的同步开关。
+
+环境变量:
+- `WEB_ENABLED` / `web.enabled` - 是否启用 Web UI (默认: false)
+- `WEB_PORT` / `web.port` - Web 服务端口 (默认: 8080)
+- `WEB_CONFIG_PATH` / `web.config-path` - 开关配置文件路径 (默认: ./data/switches.json)
+
+配置示例:
+```yaml
+web:
+  enabled: true
+  port: 8080
+  config_path: "./data/switches.json"
+```
+
+使用说明:
+1. 启用 Web UI 后，访问 http://localhost:8080
+2. 页面展示从 Traefik 获取的所有域名
+3. 每个供应商有全局开关，控制该供应商下所有域名
+4. 每个域名可以单独控制各供应商的同步开关
+5. 新发现的域名默认所有供应商关闭，需手动开启
+
 ## 发布流程
 
 匹配 `v*` 的标签（如 `v1.0.0`）会触发：
