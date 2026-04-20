@@ -61,6 +61,7 @@ func (p *Cloudflare) List(domain string) ([]*model.Record, error) {
 			Value:        record.Content,
 			MainDomain:   mainDomain,
 			CustomDomain: record.Name,
+			Managed:      record.Comment == RecordRemark,
 		})
 	}
 	return records, err
@@ -115,6 +116,7 @@ func (p *Cloudflare) AddRecord(value, recordType string, list []*traefik.Domain)
 			Name:    d.SubDomain,
 			Content: value,
 			Type:    recordType,
+			Comment: RecordRemark,
 		})
 
 		if err != nil {
@@ -133,6 +135,10 @@ func (p *Cloudflare) DeleteRecord(list []*model.Record) error {
 		return nil
 	}
 	for _, record := range list {
+		if !record.Managed {
+			p.logger.Warnf("skip delete non-managed record %s", record.CustomDomain)
+			continue
+		}
 		identifier, err := p.zoneIdentifier(record.MainDomain)
 		if err != nil {
 			p.logger.Errorf("get zone identifier error: %v", err)

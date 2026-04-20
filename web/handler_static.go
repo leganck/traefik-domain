@@ -83,7 +83,7 @@ func StartServer(port int, handler *Handler) (*http.Server, error) {
 	handler.RegisterRoutes(mux)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf("0.0.0.0:%d", port),
 		Handler: mux,
 	}
 

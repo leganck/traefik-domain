@@ -56,7 +56,7 @@ func TraefikDomains(host, username, password string) (map[string][]*Domain, erro
 	}
 	parse, err := url.Parse(traefikUrl + "/api/http/routers")
 	if err != nil {
-		log.Errorf("url解析异常:%s %s", traefikUrl, err)
+		log.Errorf("failed to parse URL: %s %s", traefikUrl, err)
 		return nil, err
 	}
 
@@ -88,8 +88,8 @@ func TraefikDomains(host, username, password string) (map[string][]*Domain, erro
 	var routers []RouterInfo
 	err = json.Unmarshal(all, &routers)
 	if err != nil {
-		log.Errorf("json解析异常 %s", all)
-		return nil, fmt.Errorf("json解析异常 %s", all)
+		log.Errorf("failed to parse JSON: %s", all)
+		return nil, fmt.Errorf("failed to parse JSON: %s", all)
 	}
 
 	domains := make(map[string]int)
@@ -124,10 +124,4 @@ func TraefikDomains(host, username, password string) (map[string][]*Domain, erro
 	return domainMap, nil
 }
 
-func FlattenDomains(domains map[string][]*Domain) []*Domain {
-	var result []*Domain
-	for _, list := range domains {
-		result = append(result, list...)
-	}
-	return result
-}
+

@@ -55,6 +55,7 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 				CustomDomain: record.Name,
 				Value:        record.IP,
 				Type:         "A",
+				Managed:      record.Remark == RecordRemark,
 			})
 		case "cname":
 			subDomain := strings.TrimSuffix(record.CName, "."+domain)
@@ -64,6 +65,7 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 				CustomDomain: record.CName,
 				Value:        record.Target,
 				Type:         "CNAME",
+				Managed:      record.Remark == RecordRemark,
 			})
 		}
 	}
@@ -139,7 +141,7 @@ func (o *OpenWRT) addA(ctx context.Context, name, ip string) error {
 		return err
 	}
 
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", luci.RecordRemark}); err != nil {
+	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", RecordRemark}); err != nil {
 		return err
 	}
 
@@ -167,7 +169,7 @@ func (o *OpenWRT) addCName(ctx context.Context, cname, target string) error {
 		return err
 	}
 
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", luci.RecordRemark}); err != nil {
+	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", RecordRemark}); err != nil {
 		return err
 	}
 
@@ -232,7 +234,7 @@ func (o *OpenWRT) deleteRecordByName(ctx context.Context, name string) error {
 	}
 
 	for cfg, record := range records {
-		if record.Remark != luci.RecordRemark {
+		if record.Remark != RecordRemark {
 			continue
 		}
 		if record.Name == name || record.CName == name {

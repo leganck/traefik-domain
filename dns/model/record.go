@@ -9,6 +9,7 @@ type Record struct {
 	Type         string
 	MainDomain   string
 	CustomDomain string
+	Managed      bool
 }
 
 func SplitDomain(customDomain string) (string, string, error) {

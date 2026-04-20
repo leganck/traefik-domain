@@ -69,8 +69,6 @@ type DnsRecord struct {
 	Remark string `json:"remark"`
 }
 
-const RecordRemark = "traefik-domain"
-
 func NewLuciClient(rawURL, username, password string) (*LuciClient, error) {
 	cfg, err := parseOpenWRTURL(rawURL)
 	if err != nil {

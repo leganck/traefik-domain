@@ -34,6 +34,12 @@ type Provider struct {
 	switchConfig *config.SwitchConfig
 }
 
+var (
+	ipv4Regex   = regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`)
+	ipv6Regex   = regexp.MustCompile(`^([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4})$`)
+	domainRegex = regexp.MustCompile(`^(?:(?:[a-zA-Z0-9-]{0,61}[A-Za-z0-9]\.)+)(?:[A-Za-z]{2,})$`)
+)
+
 func NewDNSProvider(cfg *provider.ProviderConfig, switchConfig *config.SwitchConfig, logger *log.Entry) (*Provider, error) {
 	providerType := strings.ToLower(cfg.Type)
 
@@ -73,25 +79,16 @@ func detectRecordType(value string) (string, string) {
 	if value == "" {
 		return "A", value
 	}
-	ipv4Regex := `^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`
-	ipv6Regex := `^([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4})$`
-	domainRegex := `^(?:(?:[a-zA-Z0-9-]{0,61}[A-Za-z0-9]\.)+)(?:[A-Za-z]{2,})$`
-
-	if matchRegex(value, ipv4Regex) {
+	if ipv4Regex.MatchString(value) {
 		return "A", value
 	}
-	if matchRegex(value, ipv6Regex) {
+	if ipv6Regex.MatchString(value) {
 		return "AAAA", value
 	}
-	if matchRegex(value, domainRegex) {
+	if domainRegex.MatchString(value) {
 		return "CNAME", value + "."
 	}
 	return "A", value
-}
-
-func matchRegex(s, pattern string) bool {
-	re := regexp.MustCompile(pattern)
-	return re.MatchString(s)
 }
 
 func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
@@ -127,22 +124,31 @@ func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) er
 
 	var updateList = make([]*model.Record, 0)
 	var addList []*traefik.Domain
+	var nonManagedRecords []*model.Record
 
 	for _, d := range filteredDomains {
 		record, ok := domainMap[d.SubDomain]
 		if ok {
-			if record.Value != p.recordValue {
+			if !record.Managed {
+				nonManagedRecords = append(nonManagedRecords, record)
+				p.logger.Warnf("record %s exists but not managed by traefik-domain", d.CustomDomain)
+			} else if record.Value != p.recordValue {
 				updateList = append(updateList, &model.Record{
 					Id:         record.Id,
 					Name:       record.Name,
 					Value:      p.recordValue,
 					Type:       record.Type,
 					MainDomain: domain,
+					Managed:    true,
 				})
 			}
 		} else {
 			addList = append(addList, d)
 		}
+	}
+
+	if len(nonManagedRecords) > 0 {
+		p.logger.Warnf("found %d non-managed records that would be overwritten", len(nonManagedRecords))
 	}
 
 	err = p.provider.AddRecord(p.recordValue, p.recordType, addList)

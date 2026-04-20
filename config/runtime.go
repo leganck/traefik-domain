@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/leganck/traefik-domain/dns/model"
 	log "github.com/sirupsen/logrus"
 )
@@ -57,6 +58,7 @@ type ProvidersConfig struct {
 	data       *ProvidersData
 	mu         sync.RWMutex
 	reloadChan chan struct{}
+	watcher    *fsnotify.Watcher
 }
 
 func NewProvidersConfig() *ProvidersConfig {
@@ -64,6 +66,52 @@ func NewProvidersConfig() *ProvidersConfig {
 		path:       ProvidersPath,
 		data:       &ProvidersData{Providers: []ProviderConfig{}, PollInterval: 5, WebEnabled: true, WebPort: 8080, LogLevel: "info"},
 		reloadChan: make(chan struct{}, 1),
+	}
+}
+
+func (pc *ProvidersConfig) StartWatcher() error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create file watcher: %w", err)
+	}
+	pc.watcher = watcher
+
+	dir := filepath.Dir(pc.path)
+	if err := watcher.Add(dir); err != nil {
+		watcher.Close()
+		return fmt.Errorf("failed to watch directory: %w", err)
+	}
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
+					if event.Name == pc.path {
+						log.Info("Providers config file changed, triggering reload")
+						pc.notifyReload()
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Errorf("file watcher error: %v", err)
+			}
+		}
+	}()
+
+	log.Infof("Started watching config directory: %s", dir)
+	return nil
+}
+
+func (pc *ProvidersConfig) StopWatcher() {
+	if pc.watcher != nil {
+		pc.watcher.Close()
+		pc.watcher = nil
 	}
 }
 
@@ -285,8 +333,9 @@ func (pc *ProvidersConfig) DeleteProvider(providerID string) error {
 }
 
 type RecordInfo struct {
-	Value string `json:"value"`
-	Type  string `json:"type"`
+	Value   string `json:"value"`
+	Type    string `json:"type"`
+	Managed bool   `json:"managed"`
 }
 
 type DomainConfig struct {

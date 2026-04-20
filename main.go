@@ -43,6 +43,11 @@ func main() {
 		}
 	}
 
+	if err := providersConfig.StartWatcher(); err != nil {
+		log.Warnf("Failed to start config watcher: %v", err)
+	}
+	defer providersConfig.StopWatcher()
+
 	applyEnvVarsToConfig(providersConfig)
 
 	var conf struct {
@@ -177,33 +182,41 @@ func main() {
 }
 
 func applyEnvVarsToConfig(pc *config.ProvidersConfig) {
-	pollInterval := 5
+	currentPollInterval := pc.GetPollInterval()
+	currentWebEnabled := pc.GetWebEnabled()
+	currentWebPort := pc.GetWebPort()
+	currentLogLevel := pc.GetLogLevel()
+
+	pollInterval := currentPollInterval
 	if v := os.Getenv("POLL_INTERVAL"); v != "" {
 		if n, _ := fmt.Sscanf(v, "%d", &pollInterval); n != 1 || pollInterval <= 0 {
 			pollInterval = 5
 		}
 	}
 
-	webEnabled := true
+	webEnabled := currentWebEnabled
 	if v := os.Getenv("WEB_ENABLED"); v != "" {
 		webEnabled = strings.ToLower(v) == "true"
 	}
 
-	webPort := 8080
+	webPort := currentWebPort
 	if v := os.Getenv("WEB_PORT"); v != "" {
 		if n, _ := fmt.Sscanf(v, "%d", &webPort); n != 1 || webPort <= 0 {
 			webPort = 8080
 		}
 	}
 
-	logLevel := "info"
+	logLevel := currentLogLevel
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		logLevel = v
 	}
 
 	pc.SetAppConfig(pollInterval, webEnabled, webPort, logLevel)
-	log.Infof("Applied app config from env vars: poll_interval=%d, web_enabled=%v, web_port=%d, log_level=%s",
-		pollInterval, webEnabled, webPort, logLevel)
+
+	if pollInterval != currentPollInterval || webEnabled != currentWebEnabled || webPort != currentWebPort || logLevel != currentLogLevel {
+		log.Infof("Applied config from env vars: poll_interval=%d, web_enabled=%v, web_port=%d, log_level=%s",
+			pollInterval, webEnabled, webPort, logLevel)
+	}
 }
 
 func initProvidersFromEnvVars(pc *config.ProvidersConfig) {
