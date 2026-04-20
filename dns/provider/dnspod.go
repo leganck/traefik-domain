@@ -33,6 +33,7 @@ func (p *DnsPod) List(domain string) ([]*model.Record, error) {
 			Value:        record.Value,
 			MainDomain:   domain,
 			CustomDomain: record.Name + "." + domain,
+			Managed:      record.Remark == RecordRemark,
 		})
 	}
 	return records, err
@@ -69,7 +70,6 @@ func (p *DnsPod) AddRecord(value, recordType string, list []*traefik.Domain) err
 		p.logger.Debugf("no record to add")
 		return nil
 	}
-	var errorList []*traefik.Domain
 	for _, d := range list {
 		create, _, err := p.client.Records.Create(d.MainDomain, "", dnspod.Record{
 			Name:   d.SubDomain,
@@ -78,10 +78,10 @@ func (p *DnsPod) AddRecord(value, recordType string, list []*traefik.Domain) err
 			TTL:    "600",
 			Line:   "默认",
 			Status: "enable",
+			Remark: RecordRemark,
 		})
 		if err != nil {
 			p.logger.Errorf("add record %s %s error: %v", d.CustomDomain, value, err)
-			errorList = append(errorList, d)
 			continue
 		}
 		p.logger.Infof("add record %s %s success", d.CustomDomain, create.Value)
@@ -96,6 +96,10 @@ func (p *DnsPod) DeleteRecord(list []*model.Record) error {
 		return nil
 	}
 	for _, record := range list {
+		if !record.Managed {
+			p.logger.Warnf("skip delete non-managed record %s", record.CustomDomain)
+			continue
+		}
 		_, err := p.client.Records.Delete(0, record.MainDomain, record.Id)
 		if err != nil {
 			p.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)

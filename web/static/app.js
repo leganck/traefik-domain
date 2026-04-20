@@ -184,15 +184,18 @@ function renderDomainTable() {
                 </td>
                 ${providers.map(p => {
                   const record = records[p.id] || null;
+                  const isNonManaged = record && !record.managed;
                   return `
-                    <td class="toggle-cell">
+                    <td class="toggle-cell ${isNonManaged ? 'non-managed' : ''}">
                       <div class="cell-content">
                         <div class="cell-toggle">
                           <span class="status-dot ${record ? 'exists' : 'missing'}"></span>
+                          ${isNonManaged ? '<span class="managed-warning" title="该记录非本工具管理，开启将覆盖">⚠</span>' : ''}
                           <label class="toggle-switch">
                             <input type="checkbox"
                                    data-domain="${escapeHtml(domainName)}"
                                    data-provider="${escapeHtml(p.id)}"
+                                   data-managed="${record ? record.managed : 'true'}"
                                    ${entryProviders[p.id] ? 'checked' : ''}
                                    onchange="handleDomainToggle(this)">
                             <span class="toggle-slider"></span>
@@ -223,6 +226,15 @@ async function handleDomainToggle(checkbox) {
   const domain = checkbox.dataset.domain;
   const providerId = checkbox.dataset.provider;
   const enabled = checkbox.checked;
+  const isManaged = checkbox.dataset.managed === 'true';
+
+  if (enabled && !isManaged) {
+    const confirmed = confirm('该记录非本工具管理，开启将覆盖提供商中的现有记录，是否继续？');
+    if (!confirmed) {
+      checkbox.checked = false;
+      return;
+    }
+  }
 
   checkbox.disabled = true;
 
@@ -234,6 +246,7 @@ async function handleDomainToggle(checkbox) {
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     showToast(enabled ? '已开启同步' : '已关闭并删除 DNS 记录');
+    loadDomainsSilent();
   } catch (error) {
     console.error('Failed to toggle domain:', error);
     checkbox.checked = !enabled;

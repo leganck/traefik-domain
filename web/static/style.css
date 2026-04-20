@@ -788,3 +788,14 @@ td.action-cell {
     font-size: 15px;
   }
 }
+
+.toggle-cell.non-managed {
+  background-color: #fff3cd;
+}
+
+.managed-warning {
+  color: #dc3545;
+  font-size: 14px;
+  margin-left: 4px;
+  cursor: help;
+}
