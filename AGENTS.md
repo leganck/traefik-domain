@@ -8,19 +8,80 @@
 ## 项目结构
 
 ```
-main.go          # 入口：轮询 Traefik 并更新 DNS 记录
-config/config.go # 通过 viper 加载配置（环境变量 + config.yaml）
-dns/             # DNS 提供商实现（dnspod、adguard、cloudflare）
-traefik/traefik.go # Traefik API 客户端
+main.go               # 入口：独立的 Traefik 和 DNS 轮询
+config/runtime.go     # 配置管理和缓存处理
+dns/                  # DNS 提供商实现（dnspod、adguard、cloudflare、openwrt）
+traefik/traefik.go    # Traefik API 客户端
+web/                  # Web UI 处理器和前端
 ```
+
+## 轮询机制
+
+### 独立轮询
+
+系统采用两个独立的轮询任务：
+
+1. **Traefik 轮询**（默认 30 秒）
+   - 从 Traefik API 获取所有路由中的域名
+   - 合并到 SwitchConfig（自动保存）
+   - 标记域名是否在 Traefik 中（`InTraefik` 字段）
+
+2. **DNS 提供商轮询**（默认 300 秒）
+   - 先更新缓存：从 DNS 查询所有记录（包括 Managed 状态）
+   - 后同步：根据缓存和开关同步 DNS 记录
+   - 自动保存缓存到文件
+
+### 轮询顺序优化
+
+DNS 轮询按以下顺序执行：
+1. `updateRecordCache()` - 查询 DNS 记录并更新缓存
+2. `syncFromCache()` - 使用最新缓存同步 DNS
+
+这样可以确保每次同步时都有正确的 `Managed` 状态判断。
+
+### 启动初始化
+
+程序启动时会自动执行一次 DNS 轮询，初始化记录缓存，避免首次同步时缓存为空的问题。
 
 ## 配置
 
 支持 `config.yaml` 和环境变量两种方式。关键配置项：
 - `TRAEFIK_HOST` / `traefik.host` - Traefik 地址（支持 `user:pass@host` 认证）
-- `DNS_NAME` / `dns.name` - DNS 提供商：`dnspod`、`adguard` 或 `cloudflare`
+- `DNS_NAME` / `dns.name` - DNS 提供商：`dnspod`、`adguard`、`cloudflare` 或 `openwrt`
 - `DNS_ID`, `DNS_SECRET` / `dns.id`, `dns.secret` - 提供商凭证
-- `POLL_INTERVAL` / `poll.interval` - 轮询间隔（秒）
+- `POLL_INTERVAL` / `poll_interval` - 已废弃（向后兼容）
+- `TRAEFIK_POLL_INTERVAL` / `traefik_poll_interval` - Traefik 轮询间隔（秒，默认 30）
+- `DNS_POLL_INTERVAL` / `dns_poll_interval` - DNS 提供商轮询间隔（秒，默认 300）
+
+### 配置示例
+
+`data/providers.json`:
+```json
+{
+  "traefik": {
+    "host": "https://traefik.example.com",
+    "username": "admin",
+    "password": "password"
+  },
+  "providers": [
+    {
+      "provider_id": "p_abcd1234",
+      "name": "my-adguard",
+      "type": "adguard",
+      "host": "http://192.168.1.2:3000",
+      "id": "admin",
+      "secret": "password",
+      "record_value": "192.168.1.10"
+    }
+  ],
+  "poll_interval": 5,
+  "traefik_poll_interval": 30,
+  "dns_poll_interval": 300,
+  "web_enabled": true,
+  "web_port": 8080,
+  "log_level": "info"
+}
+```
 
 ## Web UI 配置
 

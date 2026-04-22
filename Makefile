@@ -4,7 +4,7 @@
 VERSION=$(shell git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || git rev-parse --short HEAD)
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 BIN=traefik-domain
-DIR_SRC=.
+DIR_SRC=./cmd/traefik-domain
 DOCKER_ENV=DOCKER_BUILDKIT=1
 DOCKER=$(DOCKER_ENV) docker
 

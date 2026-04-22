@@ -120,8 +120,9 @@ function renderGlobalToggles() {
   }
 
   const providers = domainsData.providers;
+  const providerGlobals = domainsData.providerGlobals || {};
   container.innerHTML = providers.map(p => {
-    const globalEnabled = Object.values(domainsData.domains || {}).some(d => d && d.providers && d.providers[p.id]);
+    const globalEnabled = !!providerGlobals[p.id];
     return `
       <div class="toggle-item">
         <label class="toggle-switch">
@@ -227,6 +228,7 @@ async function handleDomainToggle(checkbox) {
   const providerId = checkbox.dataset.provider;
   const enabled = checkbox.checked;
   const isManaged = checkbox.dataset.managed === 'true';
+  let overwriteExisting = false;
 
   if (enabled && !isManaged) {
     const confirmed = confirm('该记录非本工具管理，开启将覆盖提供商中的现有记录，是否继续？');
@@ -234,6 +236,7 @@ async function handleDomainToggle(checkbox) {
       checkbox.checked = false;
       return;
     }
+    overwriteExisting = true;
   }
 
   checkbox.disabled = true;
@@ -242,10 +245,10 @@ async function handleDomainToggle(checkbox) {
     const response = await fetch(ENDPOINTS.toggleDomain, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain, providerId, enabled })
+      body: JSON.stringify({ domain, providerId, enabled, overwriteExisting })
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    showToast(enabled ? '已开启同步' : '已关闭并删除 DNS 记录');
+    showToast(enabled ? '已提交开启请求' : '已提交关闭请求');
     loadDomainsSilent();
   } catch (error) {
     console.error('Failed to toggle domain:', error);
@@ -269,8 +272,8 @@ async function handleProviderToggle(checkbox) {
       body: JSON.stringify({ providerId, enabled })
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    updateAllDomainToggles(providerId, enabled);
-    showToast(enabled ? '已全部开启' : '已全部关闭并删除 DNS 记录');
+    await loadDomainsSilent();
+    showToast(enabled ? '已批量提交开启请求' : '已批量提交关闭请求');
   } catch (error) {
     console.error('Failed to toggle provider:', error);
     checkbox.checked = !enabled;
@@ -278,12 +281,6 @@ async function handleProviderToggle(checkbox) {
   } finally {
     checkbox.disabled = false;
   }
-}
-
-function updateAllDomainToggles(providerId, enabled) {
-  document.querySelectorAll(`input[data-provider="${providerId}"]`).forEach(checkbox => {
-    if (checkbox.dataset.domain) checkbox.checked = enabled;
-  });
 }
 
 function showToast(message) {
@@ -453,7 +450,9 @@ document.getElementById('save-provider-btn').addEventListener('click', async () 
     }
 
     if (response.ok || response.status === 201) {
-      showToast(isEdit ? 'Provider 已更新' : 'Provider 已添加');
+	      const result = await response.json();
+	      const warning = result.warning ? '\n' + result.warning : '';
+	      showToast((isEdit ? 'Provider 已更新' : 'Provider 已添加') + warning);
       document.getElementById('provider-modal').classList.add('hidden');
       editingProviderId = null;
       loadConfig();

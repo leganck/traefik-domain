@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/leganck/traefik-domain/dns/model"
-	luci "github.com/leganck/traefik-domain/internal/luci"
+	"github.com/leganck/traefik-domain/internal/luci"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 )
@@ -45,11 +45,12 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 	}
 
 	var resultRecords []*model.Record
-	for _, record := range records {
+	for id, record := range records {
 		switch record.Type {
 		case "domain":
 			subDomain := strings.TrimSuffix(record.Name, "."+domain)
 			resultRecords = append(resultRecords, &model.Record{
+				Id:           id,
 				Name:         subDomain,
 				MainDomain:   domain,
 				CustomDomain: record.Name,
@@ -60,6 +61,7 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 		case "cname":
 			subDomain := strings.TrimSuffix(record.CName, "."+domain)
 			resultRecords = append(resultRecords, &model.Record{
+				Id:           id,
 				Name:         subDomain,
 				MainDomain:   domain,
 				CustomDomain: record.CName,
