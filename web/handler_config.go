@@ -17,8 +17,8 @@ func (h *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tfCfg := h.providersConfig.GetTraefikConfig()
-	providers := h.providersConfig.GetProviders()
+	tfCfg := h.providerStore.GetTraefikConfig()
+	providers := h.providerStore.GetProviders()
 
 	for i := range providers {
 		providers[i].Secret = maskSecret(providers[i].Secret)
@@ -49,7 +49,7 @@ func (h *Handler) handleUpdateTraefikConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	existing := h.providersConfig.GetTraefikConfig()
+	existing := h.providerStore.GetTraefikConfig()
 	if req.Host != "" {
 		existing.Host = req.Host
 	}
@@ -60,7 +60,7 @@ func (h *Handler) handleUpdateTraefikConfig(w http.ResponseWriter, r *http.Reque
 		existing.Password = req.Password
 	}
 
-	if err := h.providersConfig.SetTraefikConfig(existing); err != nil {
+	if err := h.providerStore.SetTraefikConfig(existing); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

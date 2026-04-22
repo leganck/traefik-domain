@@ -1,6 +1,7 @@
 package traefik
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,17 @@ var httpClient = &http.Client{
 }
 
 var hostRegex = regexp.MustCompile("Host\\(`([a-zA-Z0-9.\\-]+)`\\)")
+
+type Client interface {
+	Domains(ctx context.Context) (map[string][]*Domain, error)
+}
+
+type HTTPClient struct {
+	host     string
+	username string
+	password string
+	client   *http.Client
+}
 
 type Domain struct {
 	MainDomain   string `json:"domain"`
@@ -45,12 +57,29 @@ type RouterInfo struct {
 	Provider    string   `json:"provider,omitempty"`
 }
 
+func NewHTTPClient(host, username, password string, client *http.Client) *HTTPClient {
+	if client == nil {
+		client = httpClient
+	}
+
+	return &HTTPClient{
+		host:     host,
+		username: username,
+		password: password,
+		client:   client,
+	}
+}
+
 func TraefikDomains(host, username, password string) (map[string][]*Domain, error) {
-	if host == "" {
+	return NewHTTPClient(host, username, password, nil).Domains(context.Background())
+}
+
+func (c *HTTPClient) Domains(ctx context.Context) (map[string][]*Domain, error) {
+	if c.host == "" {
 		return nil, fmt.Errorf("traefik host is empty")
 	}
 
-	traefikUrl := host
+	traefikUrl := c.host
 	if !strings.HasPrefix(traefikUrl, "http") {
 		traefikUrl = "http://" + traefikUrl
 	}
@@ -60,14 +89,14 @@ func TraefikDomains(host, username, password string) (map[string][]*Domain, erro
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", parse.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parse.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	if username != "" && password != "" {
-		req.SetBasicAuth(username, password)
+	if c.username != "" && c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		log.Errorf("HTTP request failed: %v", err)
 		return nil, err
@@ -123,5 +152,3 @@ func TraefikDomains(host, username, password string) (map[string][]*Domain, erro
 	}
 	return domainMap, nil
 }
-
-

@@ -4,25 +4,55 @@ import (
 	"net/http"
 
 	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/internal/state"
 )
 
-type DeleteDomainFunc func(domain, provider string) error
-
-type Handler struct {
-	switchConfig    *config.SwitchConfig
-	providersConfig *config.ProvidersConfig
-	deleteDomain    DeleteDomainFunc
+type DomainUpdateRequest struct {
+	Domain            string
+	ProviderID        string
+	Enabled           bool
+	OverwriteExisting bool
 }
 
-func NewHandler(switchConfig *config.SwitchConfig, providersConfig *config.ProvidersConfig) *Handler {
+type ApplyDomainUpdatesFunc func(requests []DomainUpdateRequest) error
+
+type DomainStateStore interface {
+	GetPreferences() map[string]*state.DomainPreference
+	GetDiscovery() map[string]*state.DomainDiscovery
+	GetRecords() map[string]*state.DomainRecordCache
+	SetDomainProvider(domain string, provider string, enabled bool, overwrite bool) error
+	SetProviderGlobal(provider string, enabled bool) error
+	GetProviderGlobals() map[string]bool
+	DeleteDomain(domain string) (map[string]bool, error)
+	RemoveProvider(providerName string)
+}
+
+type ProviderStore interface {
+	GetProviders() []config.ProviderConfig
+	GetProvider(providerID string) (*config.ProviderConfig, bool)
+	GetTraefikConfig() config.TraefikConfig
+	SetTraefikConfig(cfg config.TraefikConfig) error
+	AddProvider(provider config.ProviderConfig) error
+	UpdateProvider(providerID string, updates config.ProviderConfig) error
+	DeleteProvider(providerID string) error
+	FindDuplicateBackendWarning(provider config.ProviderConfig, excludeProviderID string) string
+}
+
+type Handler struct {
+	stateStore         DomainStateStore
+	providerStore      ProviderStore
+	applyDomainUpdates ApplyDomainUpdatesFunc
+}
+
+func NewHandler(stateStore DomainStateStore, providerStore ProviderStore) *Handler {
 	return &Handler{
-		switchConfig:    switchConfig,
-		providersConfig: providersConfig,
+		stateStore:    stateStore,
+		providerStore: providerStore,
 	}
 }
 
-func (h *Handler) SetDeleteDomainFunc(fn DeleteDomainFunc) {
-	h.deleteDomain = fn
+func (h *Handler) SetApplyDomainUpdatesFunc(fn ApplyDomainUpdatesFunc) {
+	h.applyDomainUpdates = fn
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {

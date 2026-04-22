@@ -3,6 +3,7 @@ package provider
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,16 +14,6 @@ import (
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 )
-
-type ProviderConfig struct {
-	ProviderID  string
-	Name        string
-	Type        string
-	ID          string
-	Secret      string
-	Host        string
-	RecordValue string
-}
 
 type AdGuard struct {
 	logger     *log.Entry
@@ -146,6 +137,7 @@ func (p *AdGuard) List(domain string) ([]*model.Record, error) {
 			}
 			if mainDomain == domain {
 				result = append(result, &model.Record{
+					Id:           stableRuleID(rule),
 					Name:         subDomain,
 					MainDomain:   mainDomain,
 					CustomDomain: ruleDomain,
@@ -172,6 +164,7 @@ func (p *AdGuard) List(domain string) ([]*model.Record, error) {
 
 		if mainDomain == domain {
 			result = append(result, &model.Record{
+				Id:           stableRuleID(rule),
 				Name:         subDomain,
 				MainDomain:   mainDomain,
 				CustomDomain: ruleDomain,
@@ -182,6 +175,10 @@ func (p *AdGuard) List(domain string) ([]*model.Record, error) {
 		}
 	}
 	return result, nil
+}
+
+func stableRuleID(rule string) string {
+	return fmt.Sprintf("%x", sha1.Sum([]byte(strings.TrimSpace(rule))))
 }
 
 func (p *AdGuard) AddRecord(value, recordType string, list []*traefik.Domain) error {

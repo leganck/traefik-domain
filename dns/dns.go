@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/dns/provider"
+	"github.com/leganck/traefik-domain/internal/state"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
 )
@@ -31,7 +31,7 @@ type Provider struct {
 	recordValue  string
 	recordType   string
 	provider     DnsProvider
-	switchConfig *config.SwitchConfig
+	switchConfig *state.DomainSyncState
 }
 
 var (
@@ -40,7 +40,7 @@ var (
 	domainRegex = regexp.MustCompile(`^(?:(?:[a-zA-Z0-9-]{0,61}[A-Za-z0-9]\.)+)(?:[A-Za-z]{2,})$`)
 )
 
-func NewDNSProvider(cfg *provider.ProviderConfig, switchConfig *config.SwitchConfig, logger *log.Entry) (*Provider, error) {
+func NewDNSProvider(cfg *provider.ProviderConfig, switchConfig *state.DomainSyncState, logger *log.Entry) (*Provider, error) {
 	providerType := strings.ToLower(cfg.Type)
 
 	var dnsProvider DnsProvider
@@ -91,78 +91,54 @@ func detectRecordType(value string) (string, string) {
 	return "A", value
 }
 
-func (p *Provider) AddOrUpdateCname(domain string, domains []*traefik.Domain) error {
-	var filteredDomains []*traefik.Domain
-	if p.switchConfig != nil {
-		for _, d := range domains {
-			if p.switchConfig.ShouldSync(d.CustomDomain, p.id) {
-				filteredDomains = append(filteredDomains, d)
-			} else {
-				p.logger.Debugf("Skipping %s for provider %s (disabled)", d.CustomDomain, p.name)
-			}
-		}
-	} else {
-		filteredDomains = domains
+func (p *Provider) EnsureDomain(customDomain string, overwrite bool) error {
+	subDomain, mainDomain, err := model.SplitDomain(customDomain)
+	if err != nil {
+		return fmt.Errorf("failed to parse domain %s: %w", customDomain, err)
 	}
 
-	if len(filteredDomains) == 0 {
-		p.logger.Debugf("No domains to sync for provider %s", p.name)
+	records, err := p.provider.List(mainDomain)
+	if err != nil {
+		return fmt.Errorf("failed to list records for %s: %w", mainDomain, err)
+	}
+
+	var existing *model.Record
+	for _, r := range records {
+		if strings.EqualFold(r.CustomDomain, customDomain) {
+			existing = r
+			break
+		}
+	}
+
+	if existing == nil {
+		return p.provider.AddRecord(p.recordValue, p.recordType, []*traefik.Domain{{
+			MainDomain:   mainDomain,
+			SubDomain:    subDomain,
+			CustomDomain: customDomain,
+		}})
+	}
+
+	if !existing.Managed && !overwrite {
+		return fmt.Errorf("record %s exists but is not managed by traefik-domain", customDomain)
+	}
+
+	if existing.Value == p.recordValue && existing.Type == p.recordType && existing.Managed {
+		p.logger.Debugf("record %s already matches desired state", customDomain)
 		return nil
 	}
 
-	domainMap := make(map[string]*model.Record)
-
-	list, err := p.provider.List(domain)
-	if err != nil {
-		p.logger.Warningf("'%s' List error: %v", domain, err)
-		return err
-	}
-
-	for _, d := range list {
-		domainMap[d.Name] = d
-	}
-
-	var updateList = make([]*model.Record, 0)
-	var addList []*traefik.Domain
-	var nonManagedRecords []*model.Record
-
-	for _, d := range filteredDomains {
-		record, ok := domainMap[d.SubDomain]
-		if ok {
-			if !record.Managed {
-				nonManagedRecords = append(nonManagedRecords, record)
-				p.logger.Warnf("record %s exists but not managed by traefik-domain", d.CustomDomain)
-			} else if record.Value != p.recordValue {
-				updateList = append(updateList, &model.Record{
-					Id:         record.Id,
-					Name:       record.Name,
-					Value:      p.recordValue,
-					Type:       record.Type,
-					MainDomain: domain,
-					Managed:    true,
-				})
-			}
-		} else {
-			addList = append(addList, d)
-		}
-	}
-
-	if len(nonManagedRecords) > 0 {
-		p.logger.Warnf("found %d non-managed records that would be overwritten", len(nonManagedRecords))
-	}
-
-	err = p.provider.AddRecord(p.recordValue, p.recordType, addList)
-	if err != nil {
-		return err
-	}
-	err = p.provider.UpdateRecord(p.recordValue, updateList)
-	if err != nil {
-		return err
-	}
-	return nil
+	return p.provider.UpdateRecord(p.recordValue, []*model.Record{{
+		Id:           existing.Id,
+		Name:         existing.Name,
+		Value:        p.recordValue,
+		Type:         existing.Type,
+		MainDomain:   mainDomain,
+		CustomDomain: customDomain,
+		Managed:      true,
+	}})
 }
 
-func (p *Provider) DeleteDomain(customDomain string) error {
+func (p *Provider) DeleteManagedDomain(customDomain string) error {
 	_, mainDomain, err := model.SplitDomain(customDomain)
 	if err != nil {
 		return fmt.Errorf("failed to parse domain %s: %w", customDomain, err)
@@ -175,13 +151,13 @@ func (p *Provider) DeleteDomain(customDomain string) error {
 
 	var toDelete []*model.Record
 	for _, r := range records {
-		if strings.EqualFold(r.CustomDomain, customDomain) {
+		if strings.EqualFold(r.CustomDomain, customDomain) && r.Managed {
 			toDelete = append(toDelete, r)
 		}
 	}
 
 	if len(toDelete) == 0 {
-		p.logger.Debugf("No records found to delete for %s", customDomain)
+		p.logger.Debugf("No managed records found to delete for %s", customDomain)
 		return nil
 	}
 

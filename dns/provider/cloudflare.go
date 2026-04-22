@@ -15,12 +15,9 @@ type Cloudflare struct {
 	logger     *log.Entry
 	client     *cf.API
 	background context.Context
-}
-
-var (
-	domainZone = map[string]*cf.ResourceContainer{}
+	zoneCache  map[string]*cf.ResourceContainer
 	zoneMutex  sync.RWMutex
-)
+}
 
 func (p *Cloudflare) Init(cfg *ProviderConfig, log *log.Entry) error {
 	apiClient, err := cf.NewWithAPIToken(cfg.Secret)
@@ -31,6 +28,7 @@ func (p *Cloudflare) Init(cfg *ProviderConfig, log *log.Entry) error {
 	p.client = apiClient
 	p.logger = log
 	p.background = context.Background()
+	p.zoneCache = make(map[string]*cf.ResourceContainer)
 	return nil
 }
 
@@ -154,9 +152,9 @@ func (p *Cloudflare) DeleteRecord(list []*model.Record) error {
 }
 
 func (p *Cloudflare) zoneIdentifier(domain string) (*cf.ResourceContainer, error) {
-	zoneMutex.RLock()
-	zone, exists := domainZone[domain]
-	zoneMutex.RUnlock()
+	p.zoneMutex.RLock()
+	zone, exists := p.zoneCache[domain]
+	p.zoneMutex.RUnlock()
 
 	if exists {
 		return zone, nil
@@ -174,8 +172,8 @@ func (p *Cloudflare) zoneIdentifier(domain string) (*cf.ResourceContainer, error
 	}
 
 	zoneIdentifier := cf.ZoneIdentifier(zones[0].ID)
-	zoneMutex.Lock()
-	domainZone[domain] = zoneIdentifier
-	zoneMutex.Unlock()
+	p.zoneMutex.Lock()
+	p.zoneCache[domain] = zoneIdentifier
+	p.zoneMutex.Unlock()
 	return zoneIdentifier, err
 }

@@ -21,7 +21,7 @@ func (h *Handler) handleProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getProviders(w http.ResponseWriter, r *http.Request) {
-	providers := h.providersConfig.GetProviders()
+	providers := h.providerStore.GetProviders()
 	for i := range providers {
 		providers[i].Secret = maskSecret(providers[i].Secret)
 	}
@@ -44,13 +44,14 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 
 	provider.ProviderID = config.GenerateProviderID()
 
-	if err := h.providersConfig.AddProvider(provider); err != nil {
+	if err := h.providerStore.AddProvider(provider); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	warning := h.providerStore.FindDuplicateBackendWarning(provider, provider.ProviderID)
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "created"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "created", "warning": warning})
 }
 
 func (h *Handler) handleProviderDetail(w http.ResponseWriter, r *http.Request) {
@@ -76,24 +77,49 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request, provide
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	existing, exists := h.providerStore.GetProvider(providerID)
+	if !exists {
+		http.Error(w, "provider not found", http.StatusNotFound)
+		return
+	}
+	merged := *existing
+	if updates.Name != "" {
+		merged.Name = updates.Name
+	}
+	if updates.Type != "" {
+		merged.Type = updates.Type
+	}
+	if updates.ID != "" {
+		merged.ID = updates.ID
+	}
+	if updates.Secret != "" {
+		merged.Secret = updates.Secret
+	}
+	if updates.Host != "" {
+		merged.Host = updates.Host
+	}
+	if updates.RecordValue != "" {
+		merged.RecordValue = updates.RecordValue
+	}
 
-	if err := h.providersConfig.UpdateProvider(providerID, updates); err != nil {
+	if err := h.providerStore.UpdateProvider(providerID, updates); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	warning := h.providerStore.FindDuplicateBackendWarning(merged, providerID)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated", "warning": warning})
 }
 
 func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request, providerID string) {
-	if h.switchConfig != nil {
-		h.switchConfig.RemoveProvider(providerID)
-	}
-
-	if err := h.providersConfig.DeleteProvider(providerID); err != nil {
+	if err := h.providerStore.DeleteProvider(providerID); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
+	}
+
+	if h.stateStore != nil {
+		h.stateStore.RemoveProvider(providerID)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
