@@ -187,9 +187,10 @@ func (h *Handler) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 		requests := make([]DomainUpdateRequest, 0, len(domains))
 		for domainName := range domains {
 			requests = append(requests, DomainUpdateRequest{
-				Domain:     domainName,
-				ProviderID: req.ProviderID,
-				Enabled:    req.Enabled,
+				Domain:            domainName,
+				ProviderID:        req.ProviderID,
+				Enabled:           req.Enabled,
+				OverwriteExisting: req.OverwriteExisting,
 			})
 		}
 		if err := h.applyDomainUpdates(requests); err != nil {

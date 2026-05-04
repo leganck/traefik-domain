@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	cf "github.com/cloudflare/cloudflare-go"
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/internal/providerutil"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
@@ -19,7 +21,7 @@ type Cloudflare struct {
 	zoneMutex  sync.RWMutex
 }
 
-func (p *Cloudflare) Init(cfg *ProviderConfig, log *log.Entry) error {
+func (p *Cloudflare) Init(cfg *config.ProviderConfig, log *log.Entry) error {
 	apiClient, err := cf.NewWithAPIToken(cfg.Secret)
 	if err != nil {
 		log.Errorf("init cloudflare client error: %v", err)
@@ -59,96 +61,62 @@ func (p *Cloudflare) List(domain string) ([]*model.Record, error) {
 			Value:        record.Content,
 			MainDomain:   mainDomain,
 			CustomDomain: record.Name,
-			Managed:      record.Comment == RecordRemark,
+			Managed:      record.Comment == providerutil.RecordRemark,
 		})
 	}
 	return records, err
 }
 
-func (p *Cloudflare) UpdateRecord(value string, updateList []*model.Record) error {
-
-	if len(updateList) == 0 {
-		p.logger.Debugln("no record to update")
-		return nil
-	}
-	for _, record := range updateList {
-		if record.Value != value {
-			identifier, err := p.zoneIdentifier(record.MainDomain)
-			if err != nil {
-				p.logger.Errorf("get zone identifier error: %v", err)
-				continue
-			}
-
-			_, err = p.client.UpdateDNSRecord(p.background, identifier, cf.UpdateDNSRecordParams{
-				ID:      record.Id,
-				Name:    record.Name,
-				Type:    record.Type,
-				Content: value,
-			})
-
-			if err != nil {
-				p.logger.Errorf("update record %s %s error: %v", record.CustomDomain, value, err)
-				continue
-			}
-		} else {
-			p.logger.Infof("record %s %s no need update", record.CustomDomain, record.Value)
+func (p *Cloudflare) UpdateRecord(value string, updateList []*model.Record, overwrite bool) error {
+	return providerutil.UpdateRecords(p.logger, value, updateList, overwrite, func(record *model.Record) error {
+		identifier, err := p.zoneIdentifier(record.MainDomain)
+		if err != nil {
+			p.logger.Errorf("get zone identifier error: %v", err)
+			return err
 		}
-	}
-	p.logger.Infof("all record update success")
-	return nil
+
+		_, err = p.client.UpdateDNSRecord(p.background, identifier, cf.UpdateDNSRecordParams{
+			ID:      record.Id,
+			Name:    record.Name,
+			Type:    record.Type,
+			Content: value,
+		})
+		return err
+	})
 }
 
 func (p *Cloudflare) AddRecord(value, recordType string, list []*traefik.Domain) error {
-	if list == nil {
-		p.logger.Debugf("no record to add")
-		return nil
-	}
-	for _, d := range list {
+	return providerutil.AddDomains(p.logger, value, list, func(d *traefik.Domain) (string, error) {
 		identifier, err := p.zoneIdentifier(d.MainDomain)
 		if err != nil {
 			p.logger.Errorf("get zone identifier error: %v", err)
-			continue
+			return "", err
 		}
 
 		_, err = p.client.CreateDNSRecord(p.background, identifier, cf.CreateDNSRecordParams{
 			Name:    d.SubDomain,
 			Content: value,
 			Type:    recordType,
-			Comment: RecordRemark,
+			Comment: providerutil.RecordRemark,
 		})
-
 		if err != nil {
-			p.logger.Errorf("add record %s %s error: %v", d.CustomDomain, value, err)
-			continue
+			return "", err
 		}
-		p.logger.Infof("add record %s %s success", d.CustomDomain, value)
-	}
-	p.logger.Printf("all record add success")
-	return nil
+
+		return value, nil
+	})
 }
 
 func (p *Cloudflare) DeleteRecord(list []*model.Record) error {
-	if len(list) == 0 {
-		p.logger.Debugln("no record to delete")
-		return nil
-	}
-	for _, record := range list {
-		if !record.Managed {
-			p.logger.Warnf("skip delete non-managed record %s", record.CustomDomain)
-			continue
-		}
+	return providerutil.DeleteManagedRecords(p.logger, list, func(record *model.Record) error {
 		identifier, err := p.zoneIdentifier(record.MainDomain)
 		if err != nil {
 			p.logger.Errorf("get zone identifier error: %v", err)
-			continue
+			return err
 		}
-		if err := p.client.DeleteDNSRecord(p.background, identifier, record.Id); err != nil {
-			p.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)
-			continue
-		}
-		p.logger.Infof("delete record %s success", record.CustomDomain)
-	}
-	return nil
+
+		return p.client.DeleteDNSRecord(p.background, identifier, record.Id)
+	})
 }
 
 func (p *Cloudflare) zoneIdentifier(domain string) (*cf.ResourceContainer, error) {

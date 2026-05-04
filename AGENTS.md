@@ -5,57 +5,78 @@
 - `make build` - 构建二进制文件（输出 `traefik-domain`）
 - `make clean` - 清理构建产物
 
-## 项目结构
+## 运行时结构
 
 ```
-main.go               # 入口：独立的 Traefik 和 DNS 轮询
-config/runtime.go     # 配置管理和缓存处理
-dns/                  # DNS 提供商实现（dnspod、adguard、cloudflare、openwrt）
-traefik/traefik.go    # Traefik API 客户端
-web/                  # Web UI 处理器和前端
+cmd/traefik-domain/main.go   # 入口：加载 providers 配置、启动 watcher、运行 App
+config/                      # providers.json、环境变量、热加载
+internal/app/                # App 装配、Traefik/DNS 轮询、Web UI、重载
+internal/service/            # DNSManager：把 Web 操作转换为 DNS 变更
+internal/state/              # DomainSyncState：偏好、发现、记录缓存、持久化
+dns/                         # DNS 提供商实现（dnspod、adguard、cloudflare、openwrt）
+traefik/traefik.go           # Traefik API 客户端
+web/                         # Web API 处理器
 ```
 
-## 轮询机制
+## 数据流转
 
-### 独立轮询
+### 启动
 
-系统采用两个独立的轮询任务：
+1. `main.go` 读取 `data/providers.json`
+2. 启动文件 watcher，监听配置变更
+3. 创建 `App`
+4. `App.Run()` 初始化状态、DNS manager、Traefik client 和 Web UI
+5. 启动后先执行一次 Traefik 轮询，再执行一次 DNS 轮询
 
-1. **Traefik 轮询**（默认 30 秒）
-   - 从 Traefik API 获取所有路由中的域名
-   - 合并到 SwitchConfig（自动保存）
-   - 标记域名是否在 Traefik 中（`InTraefik` 字段）
+### Traefik 轮询
 
-2. **DNS 提供商轮询**（默认 300 秒）
-   - 先更新缓存：从 DNS 查询所有记录（包括 Managed 状态）
-   - 后同步：根据缓存和开关同步 DNS 记录
-   - 自动保存缓存到文件
+1. `App.PollTraefik()` 调用 `traefik.Client.Domains()`
+2. 从 `/api/http/routers` 中提取 `Host(...)` 域名
+3. `DomainSyncState.MergeDomains()` 更新：
+   - `Discovery.InTraefik`
+   - 补齐 `Preferences`
+   - 补齐 `Records`
+4. 状态通过延迟 flush 写入磁盘
 
-### 轮询顺序优化
+### DNS 轮询
 
-DNS 轮询按以下顺序执行：
-1. `updateRecordCache()` - 查询 DNS 记录并更新缓存
-2. `syncFromCache()` - 使用最新缓存同步 DNS
+1. `App.PollDNS()` 调用 `DNSManager.RefreshAllStates()`
+2. `DNSManager` 遍历每个 provider
+3. `refreshProviderRecordState()` 查询各主域名的记录
+4. `DomainSyncState.UpdateRecords()` 更新记录缓存，并清理已失效的 override
 
-这样可以确保每次同步时都有正确的 `Managed` 状态判断。
+### Web 写入
 
-### 启动初始化
-
-程序启动时会自动执行一次 DNS 轮询，初始化记录缓存，避免首次同步时缓存为空的问题。
+1. Web API 修改 `DomainSyncState.Preferences` 或 `ProviderGlobals`
+2. `App.applyDomainUpdates()` 把变更转换成 `DNSJob`
+3. `DNSManager.Apply()` 执行：
+   - `EnsureDomain()`
+   - `DeleteManagedDomain()`
+4. 执行后再次刷新 provider record cache
 
 ## 配置
 
-支持 `config.yaml` 和环境变量两种方式。关键配置项：
-- `TRAEFIK_HOST` / `traefik.host` - Traefik 地址（支持 `user:pass@host` 认证）
-- `DNS_NAME` / `dns.name` - DNS 提供商：`dnspod`、`adguard`、`cloudflare` 或 `openwrt`
-- `DNS_ID`, `DNS_SECRET` / `dns.id`, `dns.secret` - 提供商凭证
-- `POLL_INTERVAL` / `poll_interval` - 已废弃（向后兼容）
-- `TRAEFIK_POLL_INTERVAL` / `traefik_poll_interval` - Traefik 轮询间隔（秒，默认 30）
-- `DNS_POLL_INTERVAL` / `dns_poll_interval` - DNS 提供商轮询间隔（秒，默认 300）
+当前运行配置以 `config/providers.go` 为准，关键项如下：
+
+- `TRAEFIK_HOST` / `traefik.host` - Traefik 地址
+- `TRAEFIK_USERNAME` / `traefik.username` - Traefik 用户名
+- `TRAEFIK_PASSWORD` / `traefik.password` - Traefik 密码
+- `DNS_NAME` / `providers[].type` - DNS 提供商：`dnspod`、`adguard`、`cloudflare`、`openwrt`
+- `DNS_ID`, `DNS_SECRET` - 提供商凭证
+- `DNS_RECORD_VALUE` - 记录值，自动识别 A / AAAA / CNAME
+- `ADGUARD_HOST` - AdGuard 地址
+- `OPENWRT_HOST` - OpenWRT 地址
+- `POLL_INTERVAL` - 兼容字段，当前仍保留但不是主流程重点
+- `TRAEFIK_POLL_INTERVAL` - Traefik 轮询间隔（秒，默认 30）
+- `DNS_POLL_INTERVAL` - DNS 轮询间隔（秒，默认 300）
+- `WEB_ENABLED` - 是否启用 Web UI（默认 true）
+- `WEB_PORT` - Web 端口（默认 8080）
+- `LOG_LEVEL` - 日志级别
 
 ### 配置示例
 
-`data/providers.json`:
+`data/providers.json`：
+
 ```json
 {
   "traefik": {
@@ -74,7 +95,6 @@ DNS 轮询按以下顺序执行：
       "record_value": "192.168.1.10"
     }
   ],
-  "poll_interval": 5,
   "traefik_poll_interval": 30,
   "dns_poll_interval": 300,
   "web_enabled": true,
@@ -83,38 +103,35 @@ DNS 轮询按以下顺序执行：
 }
 ```
 
-## Web UI 配置
+## Web UI
 
-支持通过 Web 界面管理域名在各 DNS 供应商的同步开关。
+- 启用后访问 `http://localhost:8080`
+- 页面展示 Traefik 发现的域名、provider、开关和记录缓存
+- 支持域名级和 provider 级开关
+- 删除域名前会检查该域名是否仍在 Traefik 中
 
-环境变量:
-- `WEB_ENABLED` / `web.enabled` - 是否启用 Web UI (默认: false)
-- `WEB_PORT` / `web.port` - Web 服务端口 (默认: 8080)
-- `WEB_CONFIG_PATH` / `web.config-path` - 开关配置文件路径 (默认: ./data/switches.json)
+## 状态文件
 
-配置示例:
-```yaml
-web:
-  enabled: true
-  port: 8080
-  config_path: "./data/switches.json"
-```
+`internal/state/` 使用分文件持久化：
 
-使用说明:
-1. 启用 Web UI 后，访问 http://localhost:8080
-2. 页面展示从 Traefik 获取的所有域名
-3. 每个供应商有全局开关，控制该供应商下所有域名
-4. 每个域名可以单独控制各供应商的同步开关
-5. 新发现的域名默认所有供应商关闭，需手动开启
+- `./data/domain_preferences.json`
+- `./data/domain_discovery.json`
+- `./data/domain_records.json`
 
-## 发布流程
+`DomainSyncState` 负责读写这些文件，变更后延迟写盘，退出时会 `Flush()`。
 
-匹配 `v*` 的标签（如 `v1.0.0`）会触发：
-1. GoReleaser - 构建多平台二进制文件
-2. Docker buildx - 推送到 Docker Hub 和 GHCR
+## 备注
 
-## 注意事项
+- 项目当前没有测试文件
+- 使用 `CGO_ENABLED=0` 进行静态构建
+- 根目录存在预编译二进制：`traefik-domain`
 
-- 项目中无测试文件
-- 使用 CGO_ENABLED=0 进行静态构建
-- 根目录已预编译二进制文件：`traefik-domain`
+## graphify
+
+本项目在 `graphify-out/` 下维护了一份 graphify 知识图谱。
+
+规则：
+- 在回答架构或代码库问题前，先阅读 `graphify-out/GRAPH_REPORT.md`，看核心节点和社区结构
+- 如果存在 `graphify-out/wiki/index.md`，优先沿 wiki 导航，不要直接扫原始文件
+- 对跨模块的 “X 和 Y 有什么关系” 这类问题，优先使用 `graphify query "<question>"`、`graphify path "<A>" "<B>"` 或 `graphify explain "<concept>"`，不要优先用 grep；这些命令会沿图谱中的 EXTRACTED 和 INFERRED 边遍历，而不是简单搜索文件
+- 在本次会话里修改代码文件后，运行 `graphify update .` 保持图谱最新（仅 AST，无 API 成本）

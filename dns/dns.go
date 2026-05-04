@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/leganck/traefik-domain/config"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/dns/provider"
 	"github.com/leganck/traefik-domain/internal/state"
@@ -13,13 +14,13 @@ import (
 )
 
 type DnsProvider interface {
-	Init(cfg *provider.ProviderConfig, log *log.Entry) error
+	Init(cfg *config.ProviderConfig, log *log.Entry) error
 
 	List(domain string) ([]*model.Record, error)
 
 	AddRecord(value, recordType string, list []*traefik.Domain) error
 
-	UpdateRecord(value string, updateList []*model.Record) error
+	UpdateRecord(value string, updateList []*model.Record, overwrite bool) error
 
 	DeleteRecord(list []*model.Record) error
 }
@@ -40,7 +41,7 @@ var (
 	domainRegex = regexp.MustCompile(`^(?:(?:[a-zA-Z0-9-]{0,61}[A-Za-z0-9]\.)+)(?:[A-Za-z]{2,})$`)
 )
 
-func NewDNSProvider(cfg *provider.ProviderConfig, switchConfig *state.DomainSyncState, logger *log.Entry) (*Provider, error) {
+func NewDNSProvider(cfg *config.ProviderConfig, switchConfig *state.DomainSyncState, logger *log.Entry) (*Provider, error) {
 	providerType := strings.ToLower(cfg.Type)
 
 	var dnsProvider DnsProvider
@@ -135,7 +136,7 @@ func (p *Provider) EnsureDomain(customDomain string, overwrite bool) error {
 		MainDomain:   mainDomain,
 		CustomDomain: customDomain,
 		Managed:      true,
-	}})
+	}}, overwrite)
 }
 
 func (p *Provider) DeleteManagedDomain(customDomain string) error {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/leganck/traefik-domain/dns"
@@ -71,7 +72,9 @@ func (m *DNSManager) Apply(jobs []DNSJob) error {
 	m.mu.RUnlock()
 
 	for providerID, batch := range grouped {
-		m.processBatch(providers[providerID], batch)
+		if err := m.processBatch(providers[providerID], batch); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -107,15 +110,17 @@ func (m *DNSManager) providersSnapshot() []*ProviderInstance {
 	return providers
 }
 
-func (m *DNSManager) processBatch(provider *ProviderInstance, batch []DNSJob) {
+func (m *DNSManager) processBatch(provider *ProviderInstance, batch []DNSJob) error {
 	if len(batch) == 0 {
-		return
+		return nil
 	}
 
 	latestByDomain := make(map[string]DNSJob, len(batch))
 	for _, job := range batch {
 		latestByDomain[job.Domain] = job
 	}
+
+	var errs []string
 
 	for _, job := range latestByDomain {
 		var err error
@@ -126,6 +131,7 @@ func (m *DNSManager) processBatch(provider *ProviderInstance, batch []DNSJob) {
 		}
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{"provider": provider.Name, "provider_id": provider.ID, "domain": job.Domain}).Error("Failed to process DNS job")
+			errs = append(errs, fmt.Sprintf("%s: %v", job.Domain, err))
 		}
 	}
 
@@ -134,6 +140,12 @@ func (m *DNSManager) processBatch(provider *ProviderInstance, batch []DNSJob) {
 			log.WithError(err).WithFields(log.Fields{"provider": provider.Name, "provider_id": provider.ID}).Warn("Failed to refresh provider state after DNS jobs")
 		}
 	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("provider %s apply failed: %s", provider.Name, strings.Join(errs, "; "))
+	}
+
+	return nil
 }
 
 func refreshProviderRecordState(pi *ProviderInstance, switchConfig *state.DomainSyncState) error {
