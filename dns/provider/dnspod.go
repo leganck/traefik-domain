@@ -2,6 +2,8 @@ package provider
 
 import (
 	"github.com/leganck/dnspod-go"
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/internal/providerutil"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
@@ -12,7 +14,7 @@ type DnsPod struct {
 	client *dnspod.Client
 }
 
-func (p *DnsPod) Init(cfg *ProviderConfig, log *log.Entry) error {
+func (p *DnsPod) Init(cfg *config.ProviderConfig, log *log.Entry) error {
 	p.client = dnspod.NewClient(dnspod.CommonParams{LoginToken: cfg.ID + "," + cfg.Secret, Format: "json"})
 	p.logger = log
 	return nil
@@ -33,44 +35,26 @@ func (p *DnsPod) List(domain string) ([]*model.Record, error) {
 			Value:        record.Value,
 			MainDomain:   domain,
 			CustomDomain: record.Name + "." + domain,
-			Managed:      record.Remark == RecordRemark,
+			Managed:      record.Remark == providerutil.RecordRemark,
 		})
 	}
 	return records, err
 }
 
-func (p *DnsPod) UpdateRecord(value string, updateList []*model.Record) error {
-	if len(updateList) == 0 {
-		p.logger.Debugln("no record to update")
-		return nil
-	}
-
-	for _, record := range updateList {
-		if record.Value != value {
-			_, _, err := p.client.Records.Update("", record.MainDomain, record.Id, dnspod.Record{
-				Name:  record.Name,
-				Type:  record.Type,
-				Value: value,
-				Line:  "默认",
-			})
-			if err != nil {
-				p.logger.Errorf("update record %s %s error: %v", record.CustomDomain, value, err)
-				continue
-			}
-		} else {
-			p.logger.Infof("record %s %s no need update", record.CustomDomain, record.Value)
-		}
-	}
-	p.logger.Infof("all record update success")
-	return nil
+func (p *DnsPod) UpdateRecord(value string, updateList []*model.Record, overwrite bool) error {
+	return providerutil.UpdateRecords(p.logger, value, updateList, overwrite, func(record *model.Record) error {
+		_, _, err := p.client.Records.Update("", record.MainDomain, record.Id, dnspod.Record{
+			Name:  record.Name,
+			Type:  record.Type,
+			Value: value,
+			Line:  "默认",
+		})
+		return err
+	})
 }
 
 func (p *DnsPod) AddRecord(value, recordType string, list []*traefik.Domain) error {
-	if list == nil {
-		p.logger.Debugf("no record to add")
-		return nil
-	}
-	for _, d := range list {
+	return providerutil.AddDomains(p.logger, value, list, func(d *traefik.Domain) (string, error) {
 		create, _, err := p.client.Records.Create(d.MainDomain, "", dnspod.Record{
 			Name:   d.SubDomain,
 			Type:   recordType,
@@ -78,34 +62,19 @@ func (p *DnsPod) AddRecord(value, recordType string, list []*traefik.Domain) err
 			TTL:    "600",
 			Line:   "默认",
 			Status: "enable",
-			Remark: RecordRemark,
+			Remark: providerutil.RecordRemark,
 		})
 		if err != nil {
-			p.logger.Errorf("add record %s %s error: %v", d.CustomDomain, value, err)
-			continue
+			return "", err
 		}
-		p.logger.Infof("add record %s %s success", d.CustomDomain, create.Value)
-	}
-	p.logger.Printf("all record add success")
-	return nil
+
+		return create.Value, nil
+	})
 }
 
 func (p *DnsPod) DeleteRecord(list []*model.Record) error {
-	if len(list) == 0 {
-		p.logger.Debugln("no record to delete")
-		return nil
-	}
-	for _, record := range list {
-		if !record.Managed {
-			p.logger.Warnf("skip delete non-managed record %s", record.CustomDomain)
-			continue
-		}
+	return providerutil.DeleteManagedRecords(p.logger, list, func(record *model.Record) error {
 		_, err := p.client.Records.Delete(0, record.MainDomain, record.Id)
-		if err != nil {
-			p.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)
-			continue
-		}
-		p.logger.Infof("delete record %s success", record.CustomDomain)
-	}
-	return nil
+		return err
+	})
 }

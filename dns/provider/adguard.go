@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/internal/providerutil"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/traefik"
 	log "github.com/sirupsen/logrus"
@@ -31,7 +33,7 @@ type setRules struct {
 	Rules []string `json:"rules"`
 }
 
-func (a *AdGuard) Init(cfg *ProviderConfig, log *log.Entry) error {
+func (a *AdGuard) Init(cfg *config.ProviderConfig, log *log.Entry) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("adguard host is required")
 	}
@@ -117,14 +119,14 @@ func (p *AdGuard) List(domain string) ([]*model.Record, error) {
 			continue
 		}
 
-		managed := strings.Contains(rule, "#"+RecordRemark)
+		managed := isManagedRule(rule)
 		ruleWithoutMarker := rule
 		if managed {
-			idx := strings.Index(rule, "#"+RecordRemark)
+			idx := strings.Index(rule, "#"+providerutil.RecordRemark)
 			ruleWithoutMarker = strings.TrimSpace(rule[:idx])
 		}
 
-		if strings.HasPrefix(rule, "#") && !strings.HasPrefix(rule, "#"+RecordRemark) {
+		if strings.HasPrefix(rule, "#") && !strings.HasPrefix(rule, "#"+providerutil.RecordRemark) {
 			parts := strings.SplitN(ruleWithoutMarker, " ", 4)
 			if len(parts) < 3 {
 				continue
@@ -181,6 +183,14 @@ func stableRuleID(rule string) string {
 	return fmt.Sprintf("%x", sha1.Sum([]byte(strings.TrimSpace(rule))))
 }
 
+func isManagedRule(rule string) bool {
+	return strings.Contains(rule, "#"+providerutil.RecordRemark)
+}
+
+func ruleTargetsDomain(rule, domain string) bool {
+	return strings.Contains(rule, domain)
+}
+
 func (p *AdGuard) AddRecord(value, recordType string, list []*traefik.Domain) error {
 	if list == nil {
 		p.logger.Debugf("no record to add")
@@ -199,7 +209,7 @@ func (p *AdGuard) AddRecord(value, recordType string, list []*traefik.Domain) er
 	}
 
 	for _, d := range list {
-		rule := fmt.Sprintf("%s %s #%s", value, d.CustomDomain, RecordRemark)
+		rule := fmt.Sprintf("%s %s #%s", value, d.CustomDomain, providerutil.RecordRemark)
 		rules = append(rules, rule)
 		p.logger.Infof("add rule %s success", rule)
 	}
@@ -223,7 +233,7 @@ func (p *AdGuard) DeleteRecord(list []*model.Record) error {
 	for _, rule := range rules {
 		keep := true
 		for _, d := range list {
-			if d.Managed && strings.Contains(rule, d.CustomDomain) && strings.Contains(rule, "#"+RecordRemark) {
+			if d.Managed && ruleTargetsDomain(rule, d.CustomDomain) && isManagedRule(rule) {
 				keep = false
 				p.logger.Infof("delete rule %s success", rule)
 				break
@@ -237,7 +247,7 @@ func (p *AdGuard) DeleteRecord(list []*model.Record) error {
 	return p.saveFilteringRules(ctx, newRules)
 }
 
-func (p *AdGuard) UpdateRecord(value string, list []*model.Record) error {
+func (p *AdGuard) UpdateRecord(value string, list []*model.Record, overwrite bool) error {
 	if len(list) == 0 {
 		p.logger.Debugln("no record to update")
 		return nil
@@ -250,13 +260,36 @@ func (p *AdGuard) UpdateRecord(value string, list []*model.Record) error {
 	}
 
 	for _, d := range list {
-		for i, rule := range rules {
-			if strings.Contains(rule, d.CustomDomain) && strings.Contains(rule, "#"+RecordRemark) {
-				rules[i] = fmt.Sprintf("%s %s #%s", value, d.CustomDomain, RecordRemark)
-				p.logger.Infof("update rule %s -> %s success", d.CustomDomain, value)
-				break
+		newRule := fmt.Sprintf("%s %s #%s", value, d.CustomDomain, providerutil.RecordRemark)
+		updated := false
+		filtered := make([]string, 0, len(rules))
+		for _, rule := range rules {
+			if !ruleTargetsDomain(rule, d.CustomDomain) {
+				filtered = append(filtered, rule)
+				continue
 			}
+			if isManagedRule(rule) {
+				filtered = append(filtered, newRule)
+				updated = true
+				continue
+			}
+			if overwrite {
+				if !updated {
+					filtered = append(filtered, newRule)
+					updated = true
+				}
+				continue
+			}
+			filtered = append(filtered, rule)
 		}
+		if overwrite && !updated {
+			filtered = append(filtered, newRule)
+			updated = true
+		}
+		if updated {
+			p.logger.Infof("update rule %s -> %s success", d.CustomDomain, value)
+		}
+		rules = filtered
 	}
 
 	return p.saveFilteringRules(ctx, rules)

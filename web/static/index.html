@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Traefik Domain</title>
+  <title>Traefik 域名管理</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>Traefik Domain</h1>
+      <h1>Traefik 域名管理</h1>
       <p class="subtitle">管理从 Traefik 自动发现的域名在 DNS 提供商之间的同步</p>
       <nav class="page-tabs">
         <button class="page-tab active" data-page="domains">域名管理</button>
@@ -20,7 +20,7 @@
     <div id="domains-page" class="page">
       <main>
         <section class="card">
-          <h2 class="card-title">全局提供商</h2>
+          <h2 class="card-title">全局开关</h2>
           <div class="global-toggles" id="globalToggles">
             <div class="loading">
               <div class="loading-spinner"></div>
@@ -42,7 +42,7 @@
               </button>
               <label class="auto-refresh-label">
                 <input type="checkbox" id="auto-refresh-toggle" checked>
-                <span class="auto-refresh-text">自动</span>
+                <span class="auto-refresh-text">自动刷新</span>
               </label>
             </div>
           </div>
@@ -61,15 +61,15 @@
         <section class="card">
           <h2 class="card-title">Traefik 配置</h2>
           <div class="form-group">
-            <label>Host</label>
+            <label>地址</label>
             <input type="text" id="tf-host" placeholder="192.168.1.1:8080">
           </div>
           <div class="form-group">
-            <label>Username（可选）</label>
+            <label>用户名（可选）</label>
             <input type="text" id="tf-username" placeholder="admin">
           </div>
           <div class="form-group">
-            <label>Password（可选）</label>
+            <label>密码（可选）</label>
             <input type="password" id="tf-password" placeholder="password">
           </div>
           <button id="save-tf-btn" class="btn btn-primary">保存配置</button>
@@ -78,7 +78,7 @@
         <section class="card">
           <h2 class="card-title">DNS 提供商</h2>
           <div id="providers-list"></div>
-          <button id="add-provider-btn" class="btn btn-secondary" style="margin-top: 12px;">+ 添加提供商</button>
+        <button id="add-provider-btn" class="btn btn-secondary" style="margin-top: 12px;">+ 添加提供商</button>
         </section>
       </main>
     </div>
@@ -86,33 +86,33 @@
 
   <div id="provider-modal" class="modal hidden">
     <div class="modal-content">
-      <h3 id="modal-title">添加 DNS 提供商</h3>
-      <div class="form-group">
-        <label>名称</label>
-        <input type="text" id="p-name" placeholder="my-adguard">
-      </div>
-      <div class="form-group">
-        <label>类型</label>
+        <h3 id="modal-title">添加 DNS 提供商</h3>
+        <div class="form-group">
+          <label>名称</label>
+          <input type="text" id="p-name" placeholder="my-adguard">
+        </div>
+        <div class="form-group">
+          <label>类型</label>
         <select id="p-type">
           <option value="adguard">AdGuard Home</option>
           <option value="cloudflare">Cloudflare</option>
           <option value="dnspod">DNSPod</option>
           <option value="openwrt">OpenWRT</option>
         </select>
-      </div>
-      <div class="form-group" id="p-host-group">
-        <label>Host URL</label>
+        </div>
+        <div class="form-group" id="p-host-group">
+        <label>主机地址</label>
         <input type="text" id="p-host" placeholder="http://192.168.1.2:3000">
-        <small>AdGuard 和 OpenWRT 需要</small>
-      </div>
-      <div class="form-group">
-        <label>ID / Username</label>
+        <small>AdGuard 和 OpenWRT 必填</small>
+        </div>
+        <div class="form-group">
+        <label>ID / 用户名</label>
         <input type="text" id="p-id" placeholder="admin 或 API ID">
-      </div>
-      <div class="form-group">
-        <label>Secret / Token / Password</label>
+        </div>
+        <div class="form-group">
+        <label>Secret / Token / 密码</label>
         <input type="password" id="p-secret" placeholder="API Token 或密码">
-      </div>
+        </div>
       <div class="form-group">
         <label>记录值（IP 或 CNAME）</label>
         <input type="text" id="p-record" placeholder="192.168.1.10">

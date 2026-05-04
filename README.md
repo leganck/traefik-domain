@@ -1,251 +1,157 @@
 # traefik-domain
 
-自动从 Traefik 获取域名路由信息，并在指定的 DNS 提供商处添加或更新 DNS 记录。
+自动从 Traefik 发现域名，并按配置同步到指定 DNS 提供商；同时提供 Web UI 用于按域名和按提供商控制同步开关。
 
-## 功能特性
+## 功能
 
-- 自动发现 Traefik 中启用的域名路由
-- 支持多种 DNS 提供商：**DNSPod**、**AdGuard**、**Cloudflare**、**OpenWRT**
-- 支持 A（IPv4）、AAAA（IPv6）、CNAME（域名）记录类型，自动检测
-- 支持 Traefik HTTP Basic Auth 认证
-- 定时轮询，自动同步
+- 从 Traefik `/api/http/routers` 自动发现启用中的域名
+- 支持 DNSPod、AdGuard、Cloudflare、OpenWRT
+- 自动识别 A / AAAA / CNAME 记录类型
+- 支持 Traefik HTTP Basic Auth
+- Traefik 轮询与 DNS 轮询相互独立
+- 支持配置文件变更热加载
+- 支持 Web UI 管理域名同步开关
 
-## 快速开始
+## 运行方式
 
-### Docker Compose（推荐）
+### 1. 准备配置
 
-```yaml
-version: "3.8"
+程序默认读取 `./data/providers.json`，也支持环境变量初始化和覆盖。
 
-services:
-  traefik-domain:
-    image: leganck/traefik-domain:latest
-    container_name: traefik-domain
-    restart: unless-stopped
-    environment:
-      - TRAEFIK_HOST=http://traefik:8080
-      - POLL_INTERVAL=5
-      - DNS_NAME=dnspod
-      - DNS_ID=your_dns_id
-      - DNS_SECRET=your_dns_secret
-      - DNS_RECORD_VALUE=192.168.1.1
-```
-
-更多示例请参考 [example/docker-compose.yml](example/docker-compose.yml)。
-
-### Docker Run
+### 2. 启动
 
 ```bash
-docker run -d \
-  --name traefik-domain \
-  --restart unless-stopped \
-  -e TRAEFIK_HOST=http://traefik:8080 \
-  -e POLL_INTERVAL=5 \
-  -e DNS_NAME=dnspod \
-  -e DNS_ID=your_dns_id \
-  -e DNS_SECRET=your_dns_secret \
-  -e DNS_RECORD_VALUE=192.168.1.1 \
-  leganck/traefik-domain:latest
-```
-
-### 二进制运行
-
-```bash
-# 从 GitHub Releases 下载对应平台的二进制文件
-# https://github.com/leganck/traefik-domain/releases
-
-# 使用环境变量
-export TRAEFIK_HOST=http://traefik:8080
-export DNS_NAME=dnspod
-export DNS_ID=your_dns_id
-export DNS_SECRET=your_dns_secret
-export DNS_RECORD_VALUE=192.168.1.1
-./traefik-domain
-
-# 或使用配置文件
-./traefik-domain  # 自动加载当前目录下的 config.yaml
-```
-
-### 源码编译
-
-```bash
-git clone https://github.com/leganck/traefik-domain.git
-cd traefik-domain
 make build
+./traefik-domain
 ```
 
-## 配置说明
+### 3. Docker
 
-支持 **环境变量** 和 **config.yaml** 配置文件两种方式，环境变量优先。
+示例请参考仓库中的 `example/docker-compose.yml`。
+
+## 配置
+
+### `data/providers.json`
+
+```json
+{
+  "traefik": {
+    "host": "https://traefik.example.com",
+    "username": "admin",
+    "password": "password"
+  },
+  "providers": [
+    {
+      "provider_id": "p_abcd1234",
+      "name": "my-adguard",
+      "type": "adguard",
+      "host": "http://192.168.1.2:3000",
+      "id": "admin",
+      "secret": "password",
+      "record_value": "192.168.1.10"
+    }
+  ],
+  "poll_interval": 5,
+  "traefik_poll_interval": 30,
+  "dns_poll_interval": 300,
+  "web_enabled": true,
+  "web_port": 8080,
+  "log_level": "info"
+}
+```
 
 ### 环境变量
 
-| 环境变量 | 配置文件键 | 说明 | 默认值 |
-|---|---|---|---|
-| `TRAEFIK_HOST` | `traefik.host` | Traefik API 地址，支持 `user:pass@host` 认证格式 | - |
-| `POLL_INTERVAL` | `poll.interval` | 轮询间隔（秒） | `5` |
-| `DNS_NAME` | `dns.name` | DNS 提供商：`dnspod`、`adguard`、`cloudflare`、`openwrt` | - |
-| `DNS_ID` | `dns.id` | DNS 提供商认证 ID / 用户名 | - |
-| `DNS_SECRET` | `dns.secret` | DNS 提供商认证密钥 / 密码 | - |
-| `DNS_RECORD_VALUE` | `dns.record.value` | DNS 记录值，支持 IPv4、IPv6 或域名 | - |
-| `DNS_REFRESH` | `dns.refresh` | 是否强制刷新 DNS 记录 | `false` |
-| `AD_GUARD_HOST` | `adguard.host` | AdGuard Home 地址（`dns.name=adguard` 时必填） | - |
-| `OPENWRT_HOST` | `openwrt.host` | OpenWRT 地址（`dns.name=openwrt` 时必填） | - |
-| `LOG_LEVEL` | `log.level` | 日志级别：`debug`、`info`、`warn`、`error` | `info` |
-
-### config.yaml 示例
-
-完整配置示例请参考 [example/config.yaml](example/config.yaml)。
-
-```yaml
-traefik:
-  host: "http://traefik:8080"
-
-dns:
-  use: "dnspod"
-  record: "192.168.1.1"
-
-  dnsPod:
-    loginToken: "your_dnspod_login_token"
-
-log_level: "info"
-poll_interval: 5
-```
-
-配置文件搜索路径：`./config.yaml` → `./config/config.yaml` → `/etc/traefik-domain/config.yaml` → `~/.traefik-domain/config.yaml`
-
-### DNS_RECORD_VALUE 说明
-
-根据值的类型自动检测记录类型：
-
-| 值类型 | 示例 | 记录类型 |
+| 环境变量 | 说明 | 默认值 |
 |---|---|---|
-| IPv4 地址 | `192.168.1.1` | A |
-| IPv6 地址 | `2001:db8::1` | AAAA |
-| 域名 | `server.example.com` | CNAME |
+| `TRAEFIK_HOST` | Traefik 地址 | - |
+| `TRAEFIK_USERNAME` | Traefik 用户名 | - |
+| `TRAEFIK_PASSWORD` | Traefik 密码 | - |
+| `DNS_NAME` | DNS 提供商名称 | - |
+| `DNS_ID` | DNS 提供商 ID / 用户名 | - |
+| `DNS_SECRET` | DNS 提供商密钥 / 密码 | - |
+| `DNS_RECORD_VALUE` | 记录值，自动识别 A / AAAA / CNAME | - |
+| `ADGUARD_HOST` | AdGuard 地址 | - |
+| `OPENWRT_HOST` | OpenWRT 地址 | - |
+| `POLL_INTERVAL` | 兼容字段，当前仅作为 app 配置保留 | `5` |
+| `TRAEFIK_POLL_INTERVAL` | Traefik 轮询间隔（秒） | `30` |
+| `DNS_POLL_INTERVAL` | DNS 轮询间隔（秒） | `300` |
+| `WEB_ENABLED` | 是否启用 Web UI | `true` |
+| `WEB_PORT` | Web 端口 | `8080` |
+| `LOG_LEVEL` | 日志级别 | `info` |
 
-## DNS 提供商配置示例
+## 数据流
 
-> 完整配置示例请参考 [example/config.yaml](example/config.yaml)
+```text
+main
+  -> 读取 providers.json / 环境变量
+  -> 监听 providers.json 变更
+  -> App 初始化
+      -> 加载分文件 state
+      -> 初始化 DNS provider 和 Traefik client
+      -> 启动 Web UI
+      -> 先执行一次 Traefik 轮询
+      -> 再执行一次 DNS 轮询
 
-### DNSPod
-
-```yaml
-dns:
-  use: "dnspod"
-  record: "192.168.1.1"
-  dnsPod:
-    loginToken: "your_dnspod_login_token"
+运行中：
+  Traefik 轮询 -> 更新 discovery / preferences / records
+  DNS 轮询 -> 刷新 DNS 记录缓存
+  Web API -> 修改 preferences / provider 开关 -> 立即应用到 DNS
 ```
 
-### AdGuard
+## 状态文件
 
-```yaml
-dns:
-  use: "adguard"
-  record: "192.168.1.1"
-  adGuard:
-    host: "http://adguard:3000"
-    username: "admin"
-    password: "password"
-```
+程序把运行状态拆成多个文件，放在 `./data/` 下：
 
-### Cloudflare
+- `domain_preferences.json`
+- `domain_discovery.json`
+- `domain_records.json`
 
-```yaml
-dns:
-  use: "cloudflare"
-  record: "server.example.com"
-  cloudflare:
-    apiToken: "your_cloudflare_api_token"
-```
+这些文件由 `DomainSyncState` 统一读写，并在有变更时延迟落盘。
 
-### OpenWRT
+## Web UI
 
-```yaml
-dns:
-  use: "openwrt"
-  record: "192.168.1.1"
-  openWrt:
-    host: "http://openwrt:80"
-    username: "root"
-    password: "password"
-```
+启用后访问 `http://localhost:8080`。
 
-## Traefik 认证
+主要 API：
 
-`TRAEFIK_HOST` 支持在 URL 中嵌入 HTTP Basic Auth 凭证：
-
-```bash
-# 无认证
-TRAEFIK_HOST=http://traefik:8080
-
-# HTTP Basic Auth
-TRAEFIK_HOST=admin:secretpassword@traefik:8080
-```
-
-## 项目结构
-
-```
-.
-├── main.go                # 入口：轮询 Traefik 并更新 DNS 记录
-├── config/config.go       # 通过 viper 加载配置（环境变量 + config.yaml）
-├── dns/
-│   ├── dns.go             # DNS Provider 接口与调度逻辑
-│   ├── model/             # DNS 记录模型
-│   └── provider/
-│       ├── dnspod.go      # DNSPod 实现
-│       ├── adguard.go     # AdGuard 实现
-│       ├── cloudflare.go  # Cloudflare 实现
-│       └── openwrt.go     # OpenWRT 实现
-├── traefik/traefik.go     # Traefik API 客户端
-├── util/                  # 工具函数
-├── Dockerfile
-├── example/                # 示例文件
-│   ├── docker-compose.yml
-│   └── config.yaml
-├── Makefile
-└── .goreleaser.yml
-```
+- `GET /api/domains`
+- `POST /api/toggle/domain`
+- `POST /api/toggle/provider`
+- `DELETE /api/domains/{domain}`
+- `GET /api/config`
+- `PUT /api/config/traefik`
+- `GET /api/providers`
+- `POST /api/providers`
+- `PUT /api/providers/{id}`
+- `DELETE /api/providers/{id}`
 
 ## 工作原理
 
+1. Traefik 轮询解析 `/api/http/routers`，提取 `Host(...)` 域名
+2. 域名写入 `DomainSyncState.Discovery`
+3. DNS 轮询从各 provider 拉取记录，写入 `DomainSyncState.Records`
+4. Web/UI 修改 `DomainSyncState.Preferences`
+5. `DNSManager.Apply()` 根据开关执行 `EnsureDomain()` 或 `DeleteManagedDomain()`
+6. 状态会在后台自动 flush 到磁盘
+
+## 项目结构
+
+```text
+cmd/traefik-domain/main.go   # 入口
+config/                      # providers.json、环境变量、热加载
+internal/app/                # 应用装配、轮询、重载
+internal/service/            # DNS 管理器
+internal/state/              # 域名偏好、发现、记录缓存与持久化
+dns/                         # DNS provider 适配层
+traefik/                     # Traefik API 客户端
+web/                         # Web API 和静态资源
+example/                     # 示例配置
 ```
-┌──────────────┐     轮询      ┌──────────────┐    添加/更新    ┌──────────────┐
-│              │ ───────────→  │              │ ─────────────→  │              │
-│   Traefik    │   API 获取    │ traefik-     │   DNS 记录      │  DNS Provider│
-│   API        │   域名路由    │  domain      │                 │ (DNSPod/CF/  │
-│              │ ←───────────  │              │ ←─────────────  │  AdGuard/OW) │
-└──────────────┘               └──────────────┘                 └──────────────┘
-```
 
-1. 定时从 Traefik API (`/api/http/routers`) 获取所有已启用的路由
-2. 解析路由规则中的 `Host()` 域名
-3. 按 DNS 提供商进行域名拆分（主域名 + 子域名）
-4. 查询 DNS 提供商现有记录
-5. 新增缺失的记录，更新值不匹配的记录
-
-## Docker 镜像
-
-| Registry | 镜像地址 |
-|---|---|
-| Docker Hub | `leganck/traefik-domain` |
-| GHCR | `ghcr.io/leganck/traefik-domain` |
-
-支持架构：`linux/amd64`、`linux/arm`、`linux/arm64`
-
-## 发布流程
-
-匹配 `v*` 的 Git 标签会自动触发：
-
-1. **GoReleaser** - 构建多平台二进制文件并发布到 GitHub Releases
-2. **Docker buildx** - 构建多架构 Docker 镜像并推送到 Docker Hub 和 GHCR
+## 构建
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+make build
+make clean
 ```
-
-## License
-
-MIT

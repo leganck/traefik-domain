@@ -62,12 +62,12 @@ async function loadDomains() {
 
   try {
     const response = await fetch(ENDPOINTS.domains);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP 错误：状态码 ${response.status}`);
     domainsData = await response.json();
     renderGlobalToggles();
     renderDomainTable();
   } catch (error) {
-    console.error('Failed to load data:', error);
+    console.error('加载数据失败:', error);
     showError('加载数据失败，请刷新页面重试');
   } finally {
     isLoading = false;
@@ -77,12 +77,12 @@ async function loadDomains() {
 async function loadDomainsSilent() {
   try {
     const response = await fetch(ENDPOINTS.domains);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP 错误：状态码 ${response.status}`);
     domainsData = await response.json();
     renderGlobalToggles();
     renderDomainTable();
   } catch (error) {
-    console.error('Failed to silent refresh:', error);
+    console.error('静默刷新失败:', error);
   }
 }
 
@@ -247,13 +247,13 @@ async function handleDomainToggle(checkbox) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain, providerId, enabled, overwriteExisting })
     });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) throw new Error(await getResponseMessage(response));
     showToast(enabled ? '已提交开启请求' : '已提交关闭请求');
     loadDomainsSilent();
   } catch (error) {
-    console.error('Failed to toggle domain:', error);
+    console.error('切换域名失败:', error);
     checkbox.checked = !enabled;
-    showToast('操作失败，请重试');
+    showToast(error.message || '操作失败，请重试');
   } finally {
     checkbox.disabled = false;
   }
@@ -262,6 +262,16 @@ async function handleDomainToggle(checkbox) {
 async function handleProviderToggle(checkbox) {
   const providerId = checkbox.dataset.provider;
   const enabled = checkbox.checked;
+  let overwriteExisting = false;
+
+  if (enabled && hasNonManagedRecords(providerId)) {
+    const confirmed = confirm('该提供商下存在非本工具管理的记录，批量开启将覆盖对应现有记录，是否继续？');
+    if (!confirmed) {
+      checkbox.checked = false;
+      return;
+    }
+    overwriteExisting = true;
+  }
 
   checkbox.disabled = true;
 
@@ -269,18 +279,42 @@ async function handleProviderToggle(checkbox) {
     const response = await fetch(ENDPOINTS.toggleProvider, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providerId, enabled })
+      body: JSON.stringify({ providerId, enabled, overwriteExisting })
     });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (!response.ok) throw new Error(await getResponseMessage(response));
     await loadDomainsSilent();
     showToast(enabled ? '已批量提交开启请求' : '已批量提交关闭请求');
   } catch (error) {
-    console.error('Failed to toggle provider:', error);
+    console.error('切换提供商失败:', error);
     checkbox.checked = !enabled;
-    showToast('操作失败，请重试');
+    showToast(error.message || '操作失败，请重试');
   } finally {
     checkbox.disabled = false;
   }
+}
+
+function hasNonManagedRecords(providerId) {
+  if (!domainsData || !domainsData.domains) {
+    return false;
+  }
+
+  return Object.values(domainsData.domains).some(entry => {
+    const record = entry && entry.records ? entry.records[providerId] : null;
+    return record && !record.managed;
+  });
+}
+
+async function getResponseMessage(response) {
+  try {
+    const data = await response.json();
+    if (data && data.message) {
+      return data.message;
+    }
+  } catch (error) {
+    console.error('解析响应消息失败:', error);
+  }
+
+  return `HTTP 错误：状态码 ${response.status}`;
 }
 
 function showToast(message) {
@@ -339,8 +373,8 @@ function renderConfig() {
           <h4>${escapeHtml(p.name)}</h4>
           <div class="provider-type">${escapeHtml(p.type)}</div>
           <div class="provider-meta">
-            ${p.host ? 'Host: ' + escapeHtml(p.host) + '<br>' : ''}
-            Record: ${escapeHtml(p.record_value)}
+            ${p.host ? '地址：' + escapeHtml(p.host) + '<br>' : ''}
+            记录值：${escapeHtml(p.record_value)}
           </div>
         </div>
         <div style="display:flex;gap:8px;">
@@ -452,7 +486,7 @@ document.getElementById('save-provider-btn').addEventListener('click', async () 
     if (response.ok || response.status === 201) {
 	      const result = await response.json();
 	      const warning = result.warning ? '\n' + result.warning : '';
-	      showToast((isEdit ? 'Provider 已更新' : 'Provider 已添加') + warning);
+	      showToast((isEdit ? '提供商已更新' : '提供商已添加') + warning);
       document.getElementById('provider-modal').classList.add('hidden');
       editingProviderId = null;
       loadConfig();
@@ -466,12 +500,12 @@ document.getElementById('save-provider-btn').addEventListener('click', async () 
 });
 
 async function deleteProvider(providerId, name) {
-  if (!confirm('确定要删除 Provider "' + name + '" 吗？')) return;
+  if (!confirm('确定要删除提供商 "' + name + '" 吗？')) return;
 
   try {
     const response = await fetch(ENDPOINTS.providers + '/' + encodeURIComponent(providerId), { method: 'DELETE' });
     if (response.ok) {
-      showToast('Provider 已删除');
+      showToast('提供商已删除');
       loadConfig();
       loadDomains();
     } else {

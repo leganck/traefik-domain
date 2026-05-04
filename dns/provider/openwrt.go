@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/leganck/traefik-domain/config"
+	"github.com/leganck/traefik-domain/dns/internal/providerutil"
 	"github.com/leganck/traefik-domain/dns/model"
 	"github.com/leganck/traefik-domain/internal/luci"
 	"github.com/leganck/traefik-domain/traefik"
@@ -17,7 +19,7 @@ type OpenWRT struct {
 	client *luci.LuciClient
 }
 
-func (o *OpenWRT) Init(cfg *ProviderConfig, logger *log.Entry) error {
+func (o *OpenWRT) Init(cfg *config.ProviderConfig, logger *log.Entry) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("openwrt host is required")
 	}
@@ -56,7 +58,7 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 				CustomDomain: record.Name,
 				Value:        record.IP,
 				Type:         "A",
-				Managed:      record.Remark == RecordRemark,
+				Managed:      record.Remark == providerutil.RecordRemark,
 			})
 		case "cname":
 			subDomain := strings.TrimSuffix(record.CName, "."+domain)
@@ -67,7 +69,7 @@ func (o *OpenWRT) List(domain string) ([]*model.Record, error) {
 				CustomDomain: record.CName,
 				Value:        record.Target,
 				Type:         "CNAME",
-				Managed:      record.Remark == RecordRemark,
+				Managed:      record.Remark == providerutil.RecordRemark,
 			})
 		}
 	}
@@ -83,7 +85,7 @@ func (o *OpenWRT) DeleteRecord(list []*model.Record) error {
 
 	ctx := context.Background()
 	for _, record := range list {
-		if err := o.deleteRecordByName(ctx, record.CustomDomain); err != nil {
+		if err := o.deleteRecordByName(ctx, record.CustomDomain, false); err != nil {
 			o.logger.Errorf("delete record %s error: %v", record.CustomDomain, err)
 			continue
 		}
@@ -130,24 +132,7 @@ func (o *OpenWRT) addA(ctx context.Context, name, ip string) error {
 		return fmt.Errorf("ip is required")
 	}
 
-	cfg, err := o.client.UCI(ctx, "add", []string{"dhcp", "domain"})
-	if err != nil {
-		return err
-	}
-
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "name", name}); err != nil {
-		return err
-	}
-
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "ip", ip}); err != nil {
-		return err
-	}
-
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", RecordRemark}); err != nil {
-		return err
-	}
-
-	return nil
+	return o.addUCIRecord(ctx, "domain", [][2]string{{"name", name}, {"ip", ip}})
 }
 
 func (o *OpenWRT) addCName(ctx context.Context, cname, target string) error {
@@ -158,27 +143,48 @@ func (o *OpenWRT) addCName(ctx context.Context, cname, target string) error {
 		return fmt.Errorf("target is required")
 	}
 
-	cfg, err := o.client.UCI(ctx, "add", []string{"dhcp", "cname"})
+	return o.addUCIRecord(ctx, "cname", [][2]string{{"cname", cname}, {"target", target}})
+}
+
+func (o *OpenWRT) addUCIRecord(ctx context.Context, recordType string, fields [][2]string) error {
+	cfg, err := o.client.UCI(ctx, "add", []string{"dhcp", recordType})
 	if err != nil {
 		return err
 	}
 
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "cname", cname}); err != nil {
-		return err
+	for _, field := range fields {
+		if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, field[0], field[1]}); err != nil {
+			return err
+		}
 	}
 
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "target", target}); err != nil {
-		return err
-	}
-
-	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", RecordRemark}); err != nil {
+	if _, err := o.client.UCI(ctx, "set", []string{"dhcp", cfg, "remark", providerutil.RecordRemark}); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (o *OpenWRT) UpdateRecord(value string, list []*model.Record) error {
+func (o *OpenWRT) addRecordByType(ctx context.Context, recordType, name, value string) error {
+	switch recordType {
+	case "A":
+		return o.addA(ctx, name, value)
+	case "CNAME":
+		return o.addCName(ctx, name, value)
+	default:
+		return fmt.Errorf("unsupported record type: %s", recordType)
+	}
+}
+
+func (o *OpenWRT) replaceRecord(ctx context.Context, name, value, recordType string, overwrite bool) error {
+	if err := o.deleteRecordByName(ctx, name, overwrite); err != nil {
+		return err
+	}
+
+	return o.addRecordByType(ctx, recordType, name, value)
+}
+
+func (o *OpenWRT) UpdateRecord(value string, list []*model.Record, overwrite bool) error {
 	if len(list) == 0 {
 		o.logger.Debugln("no record to update")
 		return nil
@@ -198,24 +204,19 @@ func (o *OpenWRT) UpdateRecord(value string, list []*model.Record) error {
 	for _, d := range list {
 		record, ok := recordMap[d.Name]
 		if !ok {
+			if overwrite {
+				if err := o.replaceRecord(ctx, d.CustomDomain, d.Value, d.Type, true); err != nil {
+					return err
+				}
+				o.logger.Infof("overwrite record %s -> %s success", d.Name, value)
+				continue
+			}
 			o.logger.Warnf("record %s not found", d.Name)
 			continue
 		}
 
-		if record.Type == "A" {
-			if err := o.deleteRecordByName(ctx, record.Name); err != nil {
-				return err
-			}
-			if err := o.addA(ctx, record.CustomDomain, d.Value); err != nil {
-				return err
-			}
-		} else if record.Type == "CNAME" {
-			if err := o.deleteRecordByName(ctx, record.Name); err != nil {
-				return err
-			}
-			if err := o.addCName(ctx, record.CustomDomain, d.Value); err != nil {
-				return err
-			}
+		if err := o.replaceRecord(ctx, record.CustomDomain, d.Value, record.Type, overwrite); err != nil {
+			return err
 		}
 		o.logger.Infof("update record %s -> %s success", d.Name, value)
 	}
@@ -224,7 +225,7 @@ func (o *OpenWRT) UpdateRecord(value string, list []*model.Record) error {
 	return err
 }
 
-func (o *OpenWRT) deleteRecordByName(ctx context.Context, name string) error {
+func (o *OpenWRT) deleteRecordByName(ctx context.Context, name string, overwrite bool) error {
 	result, err := o.client.UCI(ctx, "get_all", []string{"dhcp"})
 	if err != nil {
 		return err
@@ -236,7 +237,7 @@ func (o *OpenWRT) deleteRecordByName(ctx context.Context, name string) error {
 	}
 
 	for cfg, record := range records {
-		if record.Remark != RecordRemark {
+		if !overwrite && record.Remark != providerutil.RecordRemark {
 			continue
 		}
 		if record.Name == name || record.CName == name {
