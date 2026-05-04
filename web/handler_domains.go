@@ -38,18 +38,17 @@ func (h *Handler) handleGetDomains(w http.ResponseWriter, r *http.Request) {
 	providers := h.providerStore.GetProviders()
 
 	providerInfos := make([]ProviderInfo, len(providers))
+	providerIDs := make([]string, len(providers))
 	for i, p := range providers {
 		providerInfos[i] = ProviderInfo{ID: p.ProviderID, Name: p.Name}
+		providerIDs[i] = p.ProviderID
 	}
 
 	domainEntries := make(map[string]*DomainEntry)
-	for domainName, pref := range preferences {
+	for domainName := range preferences {
 		entry := &DomainEntry{
-			Providers: map[string]bool{},
+			Providers: h.stateStore.GetEffectiveProviderState(domainName, providerIDs),
 			Records:   map[string]*state.RecordInfo{},
-		}
-		if pref != nil {
-			entry.Providers = pref.Providers
 		}
 		if disc := discovery[domainName]; disc != nil {
 			entry.InTraefik = disc.InTraefik
