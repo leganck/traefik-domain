@@ -85,6 +85,16 @@ func (sc *DomainSyncState) GetProviderGlobals() map[string]bool {
 	return globals
 }
 
+func (sc *DomainSyncState) GetEffectiveProviderState(domain string, providers []string) map[string]bool {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	result := make(map[string]bool, len(providers))
+	for _, provider := range providers {
+		result[provider] = sc.providerEnabledLocked(domain, provider)
+	}
+	return result
+}
+
 func (sc *DomainSyncState) ShouldSync(domain string, provider string) bool {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()

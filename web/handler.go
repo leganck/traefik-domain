@@ -20,6 +20,7 @@ type DomainStateStore interface {
 	GetPreferences() map[string]*state.DomainPreference
 	GetDiscovery() map[string]*state.DomainDiscovery
 	GetRecords() map[string]*state.DomainRecordCache
+	GetEffectiveProviderState(domain string, providers []string) map[string]bool
 	SetDomainProvider(domain string, provider string, enabled bool, overwrite bool) error
 	SetProviderGlobal(provider string, enabled bool) error
 	GetProviderGlobals() map[string]bool
