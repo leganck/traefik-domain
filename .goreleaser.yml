@@ -86,15 +86,64 @@ checksum:
   name_template: 'checksums.txt'
 
 dockers:
-  - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
-      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}"
-      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest"
+  - id: traefik-domain-amd64
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-amd64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}-amd64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest-amd64"
+    goos: linux
+    goarch: amd64
     dockerfile: Dockerfile
     use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64,linux/arm64,linux/arm/v7"
+
+  - id: traefik-domain-arm64
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-arm64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}-arm64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest-arm64"
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile
+    use: buildx
+
+  - id: traefik-domain-armv7
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-armv7"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-armv7"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}-armv7"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest-armv7"
+    goos: linux
+    goarch: arm
+    goarm: '7'
+    dockerfile: Dockerfile
+    use: buildx
+
+docker_manifests:
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-armv7"
+
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-armv7"
+
+  - name_template: "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}"
+    image_templates:
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}-amd64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}-arm64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}-armv7"
+
+  - name_template: "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest"
+    image_templates:
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest-amd64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest-arm64"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest-armv7"
 
 changelog:
   sort: asc
