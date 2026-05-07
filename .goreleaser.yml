@@ -68,11 +68,10 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Tag}} -X main.buildTime={{.Date}}
 archives:
-  # use zip for windows archives
-  - format_overrides:
+  - formats: [tar.gz]
+    format_overrides:
       - goos: windows
-        format: zip
-    # this name template makes the OS and Arch compatible with the results of uname.
+        formats: [zip]
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -82,26 +81,20 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Mips }}_{{ .Mips }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
+
 checksum:
   name_template: 'checksums.txt'
-snapshot:
-  name_template: '{{ .Tag }}-next'
 
 dockers:
-  - id: traefik-domain
-    ids:
-      - traefik-domain
-    goos: linux
-    goarch: amd64
-    image_templates:
+  - image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
       - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}"
       - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest"
+    dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64,linux/arm64,linux/arm/v7"
-    dockerfile: Dockerfile
 
 changelog:
   sort: asc
