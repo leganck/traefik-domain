@@ -14,14 +14,13 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
+    dir: ./cmd/traefik-domain
     goos:
-      - android
       - linux
       - windows
       - darwin
       - freebsd
     goarch:
-      - '386'
       - amd64
       - arm
       - arm64
@@ -30,20 +29,41 @@ builds:
       - mips64
       - mips64le
     goarm:
-      - '5'
-      - '6'
       - '7'
     gomips:
       - hardfloat
       - softfloat
     ignore:
-      # we only need the arm64 build on android
-      - goos: android
+      # freebsd: only amd64
+      - goos: freebsd
         goarch: arm
-      - goos: android
-        goarch: '386'
-      - goos: android
-        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: freebsd
+        goarch: mips
+      - goos: freebsd
+        goarch: mipsle
+      - goos: freebsd
+        goarch: mips64
+      - goos: freebsd
+        goarch: mips64le
+      # windows/darwin: no mips
+      - goos: windows
+        goarch: mips
+      - goos: windows
+        goarch: mipsle
+      - goos: windows
+        goarch: mips64
+      - goos: windows
+        goarch: mips64le
+      - goos: darwin
+        goarch: mips
+      - goos: darwin
+        goarch: mipsle
+      - goos: darwin
+        goarch: mips64
+      - goos: darwin
+        goarch: mips64le
 
     ldflags:
       - -s -w -X main.version={{.Tag}} -X main.buildTime={{.Date}}
@@ -66,6 +86,23 @@ checksum:
   name_template: 'checksums.txt'
 snapshot:
   name_template: '{{ .Tag }}-next'
+
+dockers:
+  - id: traefik-domain
+    ids:
+      - traefik-domain
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:{{ .Tag }}"
+      - "{{ .Env.DOCKER_USERNAME }}/traefik-domain:latest"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64,linux/arm64,linux/arm/v7"
+    dockerfile: Dockerfile
+
 changelog:
   sort: asc
   filters:
