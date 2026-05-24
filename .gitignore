@@ -8,10 +8,6 @@ data/
 docs/
 .idea/
 
-# graphify - local-only artifacts (see https://github.com/safishamsi/graphify)
-graphify-out/manifest.json
-graphify-out/cost.json
-graphify-out/cache/
 # User-specific stuff
 .idea/**/workspace.xml
 .idea/**/tasks.xml
@@ -269,6 +265,3 @@ fabric.properties
 .idea/caches/build_file_checksums.ser
 
 
-graphify-out
-!graphify-out/graph.json
-!graphify-out/GRAPH_REPORT.md

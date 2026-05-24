@@ -126,12 +126,3 @@ web/                         # Web API 处理器
 - 使用 `CGO_ENABLED=0` 进行静态构建
 - 根目录存在预编译二进制：`traefik-domain`
 
-## graphify
-
-本项目在 `graphify-out/` 下维护了一份 graphify 知识图谱。
-
-规则：
-- 在回答架构或代码库问题前，先阅读 `graphify-out/GRAPH_REPORT.md`，看核心节点和社区结构
-- 如果存在 `graphify-out/wiki/index.md`，优先沿 wiki 导航，不要直接扫原始文件
-- 对跨模块的 “X 和 Y 有什么关系” 这类问题，优先使用 `graphify query "<question>"`、`graphify path "<A>" "<B>"` 或 `graphify explain "<concept>"`，不要优先用 grep；这些命令会沿图谱中的 EXTRACTED 和 INFERRED 边遍历，而不是简单搜索文件
-- 在本次会话里修改代码文件后，运行 `graphify update .` 保持图谱最新（仅 AST，无 API 成本）
